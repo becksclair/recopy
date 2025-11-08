@@ -5,12 +5,16 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"strings"
+
+	"golang.org/x/term"
 
 	"recopy/internal/fsprobe"
 	"recopy/internal/plan"
 	"recopy/internal/rsync"
+	"recopy/internal/tui"
 )
 
 // Profile represents the performance presets exposed on the CLI.
@@ -68,34 +72,22 @@ func Run(args []string) int {
 		return 2
 	}
 
-	fmt.Fprintf(os.Stdout, "recopy plan (%d steps):\n", len(executionPlan.Steps))
-	for i, step := range executionPlan.Steps {
-		fmt.Fprintf(os.Stdout, "%02d. %-12s %s -> %s [%s]\n", i+1, step.Kind, strings.Join(step.Sources, ","), step.Dest, step.Reason)
-		if step.Kind == plan.StepRsync {
-			var sparse bool
-			if len(step.Sources) == 1 {
-				if info, err := os.Stat(step.Sources[0]); err == nil && info.Mode().IsRegular() {
-					if ok, err := fsprobe.HasSparseData(step.Sources[0]); err == nil {
-						sparse = ok
-					} else if !errors.Is(err, fsprobe.ErrSparseUnsupported) {
-						fmt.Fprintf(os.Stderr, "recopy: warning: sparse probe failed for %s: %v\n", step.Sources[0], err)
-					}
-				}
-			}
-			args, err := rsync.BuildArgs(rsync.ArgsOptions{
-				Source:       step.Sources[0],
-				Dest:         step.Dest,
-				Mirror:       opts.Mirror,
-				RemoveSource: opts.Move,
-				Inplace:      opts.Inplace,
-				Profile:      string(opts.Profile),
-				PreferSparse: sparse,
-			}, caps)
-			if err == nil {
-				fmt.Fprintf(os.Stdout, "    rsync: %s\n", strings.Join(args, " "))
-			}
+	if shouldUseTUI(opts) {
+		uiErr := tui.Run(context.Background(), tui.RunOptions{
+			Plan:      executionPlan,
+			Mode:      modeLabel(opts),
+			Profile:   string(opts.Profile),
+			Transport: opts.Transport,
+			Mirror:    opts.Mirror,
+			DryRun:    opts.DryRun,
+		})
+		if uiErr != nil {
+			fmt.Fprintln(os.Stderr, "recopy: warning: tui failed, falling back to plain output:", uiErr)
+			printPlanSummary(os.Stdout, executionPlan, opts, caps)
 		}
+		return 0
 	}
+	printPlanSummary(os.Stdout, executionPlan, opts, caps)
 	return 0
 }
 
@@ -173,4 +165,49 @@ func usageSynopsis() string {
 		"               [--one-file-system]\n" +
 		"               [--no-ui]\n" +
 		"               SRC... DEST\n\n"
+}
+
+func shouldUseTUI(opts Options) bool {
+	if opts.NoUI {
+		return false
+	}
+	return term.IsTerminal(int(os.Stdout.Fd()))
+}
+
+func modeLabel(opts Options) string {
+	if opts.Move {
+		return "move"
+	}
+	return "copy"
+}
+
+func printPlanSummary(w io.Writer, executionPlan plan.Plan, opts Options, caps rsync.Capabilities) {
+	fmt.Fprintf(w, "recopy plan (%d steps):\n", len(executionPlan.Steps))
+	for i, step := range executionPlan.Steps {
+		fmt.Fprintf(w, "%02d. %-12s %s -> %s [%s]\n", i+1, step.Kind, strings.Join(step.Sources, ","), step.Dest, step.Reason)
+		if step.Kind == plan.StepRsync {
+			var sparse bool
+			if len(step.Sources) == 1 {
+				if info, err := os.Stat(step.Sources[0]); err == nil && info.Mode().IsRegular() {
+					if ok, err := fsprobe.HasSparseData(step.Sources[0]); err == nil {
+						sparse = ok
+					} else if !errors.Is(err, fsprobe.ErrSparseUnsupported) {
+						fmt.Fprintf(os.Stderr, "recopy: warning: sparse probe failed for %s: %v\n", step.Sources[0], err)
+					}
+				}
+			}
+			args, err := rsync.BuildArgs(rsync.ArgsOptions{
+				Source:       step.Sources[0],
+				Dest:         step.Dest,
+				Mirror:       opts.Mirror,
+				RemoveSource: opts.Move,
+				Inplace:      opts.Inplace,
+				Profile:      string(opts.Profile),
+				PreferSparse: sparse,
+			}, caps)
+			if err == nil {
+				fmt.Fprintf(w, "    rsync: %s\n", strings.Join(args, " "))
+			}
+		}
+	}
 }
