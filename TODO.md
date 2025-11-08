@@ -31,7 +31,7 @@ Tracking per-phase tasks from specs/recopy_plan.md. Use checkboxes to mark progr
 
 ## Phase 6 – TUI Shell
 - [x] T6.1 Bubble Tea shell (header/body/footer)
-- [ ] T6.2 Log drawer + keybinds
+- [x] T6.2 Log drawer + keybinds
 - [x] T6.3 Non-TTY fallback mode
 
 ## Phase 7 – Copy Ops
