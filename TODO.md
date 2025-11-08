@@ -11,9 +11,9 @@ Tracking per-phase tasks from specs/recopy_plan.md. Use checkboxes to mark progr
 - [ ] T1.2 cp/mv semantics resolver for SRC... DEST rules
 
 ## Phase 2 – Filesystem Probe
-- [ ] T2.1 Device ID probe + SameDevice helper
-- [ ] T2.2 Reflink probe (FICLONE/clonefile)
-- [ ] T2.3 Btrfs subvolume probe
+- [x] T2.1 Device ID probe + SameDevice helper
+- [x] T2.2 Reflink probe (FICLONE/clonefile)
+- [x] T2.3 Btrfs subvolume probe (basic heuristics)
 
 ## Phase 3 – Operation Planner
 - [ ] T3.1 Planner DAG + deterministic ordering

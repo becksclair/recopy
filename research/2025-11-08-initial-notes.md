@@ -12,6 +12,7 @@
 - Reflink detection relies on `ioctl(FICLONE/FICLONERANGE)` on Linux (xfs, btrfs, ext4 w/ reflink) and `clonefile()` on macOS; fall back to copies when ioctl returns `EOPNOTSUPP`.
 - Btrfs send/receive path requires read-only snapshots as inputs and empty directories for receive targets; ongoing send-stream v2 work is not GA yet but informs future optimization.
 - Sparse-file detection should use `FIEMAP` to decide when to pass `--sparse` to rsync, avoiding corruption on filesystems lacking sparse support.
+- Btrfs subvolume quick-check: inode 256 indicates a subvolume root on most installations; treat it as heuristic, not a guarantee.
 
 ## Planner + UI Implications
 - Profiles: auto defaults to no compression unless WAN heuristics trigger zstd L1; LAN profile is compression-off/prescan-off; WAN profile enforces zstd L1 and optional prescan.
