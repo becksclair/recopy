@@ -17,6 +17,7 @@
 ## Planner + UI Implications
 - Profiles: auto defaults to no compression unless WAN heuristics trigger zstd L1; LAN profile is compression-off/prescan-off; WAN profile enforces zstd L1 and optional prescan.
 - Bubble Tea RC introduces renderer refactors and keyboard enhancement messages, so `/internal/tui` should abstract over these APIs early to simplify future upgrades.
+- Planner baseline: deterministic ordering (alphabetical sources), rename when `--move` and SameDevice succeeds, fallback to reflink when allowed, else rsync; auto transport adds btrfs offer step when both ends are btrfs and source looks like a subvolume.
 
 ## Outstanding Questions
 1. Need scripted instructions for installing Go 1.25.3 + Charm RC deps in CI/dev images.

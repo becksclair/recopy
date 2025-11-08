@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	"recopy/internal/plan"
 )
 
 // Profile represents the performance presets exposed on the CLI.
@@ -43,9 +45,25 @@ func Run(args []string) int {
 		return 2
 	}
 
-	fmt.Fprintf(os.Stdout, "recopy stub — sources: %s\n", strings.Join(opts.Sources, ", "))
-	fmt.Fprintf(os.Stdout, "dest: %s, profile: %s, move=%t, dry-run=%t, transport=%s\n",
-		opts.Dest, opts.Profile, opts.Move, opts.DryRun, opts.Transport)
+	planInput := plan.Input{
+		Sources: opts.Sources,
+		Dest:    opts.Dest,
+		Options: plan.Options{
+			Move:      opts.Move,
+			NoReflink: opts.NoReflink,
+			Transport: opts.Transport,
+		},
+	}
+	executionPlan, err := plan.Build(planInput)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "recopy: plan build failed:", err)
+		return 2
+	}
+
+	fmt.Fprintf(os.Stdout, "recopy plan (%d steps):\n", len(executionPlan.Steps))
+	for i, step := range executionPlan.Steps {
+		fmt.Fprintf(os.Stdout, "%02d. %-12s %s -> %s [%s]\n", i+1, step.Kind, strings.Join(step.Sources, ","), step.Dest, step.Reason)
+	}
 	return 0
 }
 

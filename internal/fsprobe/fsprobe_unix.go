@@ -3,7 +3,6 @@
 package fsprobe
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 
@@ -11,15 +10,11 @@ import (
 )
 
 func deviceID(path string) (uint64, error) {
-	info, err := os.Stat(path)
-	if err != nil {
+	var st unix.Stat_t
+	if err := unix.Stat(path, &st); err != nil {
 		return 0, err
 	}
-	stat, ok := info.Sys().(*unix.Stat_t)
-	if !ok {
-		return 0, fmt.Errorf("unexpected stat type %T", info.Sys())
-	}
-	return uint64(stat.Dev), nil
+	return uint64(st.Dev), nil
 }
 
 func tryReflink(path string) (bool, error) {
@@ -62,25 +57,21 @@ func tryReflink(path string) (bool, error) {
 
 func probeBtrfs(path string) (Info, error) {
 	var info Info
-	var st unix.Statfs_t
-	if err := unix.Statfs(path, &st); err != nil {
+	var fs unix.Statfs_t
+	if err := unix.Statfs(path, &fs); err != nil {
 		return info, err
 	}
-	if uint64(st.Type) != btrfsSuperMagic {
+	if uint64(fs.Type) != btrfsSuperMagic {
 		return info, nil
 	}
 	info.IsBtrfs = true
 
 	// Subvolume heuristic: inode number 256 typically indicates subvolume roots.
-	fi, err := os.Stat(path)
-	if err != nil {
+	var st unix.Stat_t
+	if err := unix.Stat(path, &st); err != nil {
 		return info, err
 	}
-	stat, ok := fi.Sys().(*unix.Stat_t)
-	if !ok {
-		return info, fmt.Errorf("unexpected stat type %T", fi.Sys())
-	}
-	if stat.Ino == 256 {
+	if st.Ino == 256 {
 		info.IsSubvolume = true
 	}
 	return info, nil

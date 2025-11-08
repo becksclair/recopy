@@ -16,7 +16,7 @@ Tracking per-phase tasks from specs/recopy_plan.md. Use checkboxes to mark progr
 - [x] T2.3 Btrfs subvolume probe (basic heuristics)
 
 ## Phase 3 – Operation Planner
-- [ ] T3.1 Planner DAG + deterministic ordering
+- [x] T3.1 Planner DAG + deterministic ordering (rename/reflink/rsync heuristics wired)
 - [ ] T3.2 Safety checks (dest inside src, trailing slash normalization)
 
 ## Phase 4 – Rsync Capability + Args
