@@ -109,8 +109,14 @@ func Parse(args []string) (Options, error) {
 	if len(remaining) < 2 {
 		return Options{}, errors.New("expected SRC... DEST paths")
 	}
-	opts.Dest = remaining[len(remaining)-1]
-	opts.Sources = remaining[:len(remaining)-1]
+	rawDest := remaining[len(remaining)-1]
+	rawSources := remaining[:len(remaining)-1]
+	cleanedSources, cleanedDest, err := normalizePaths(rawSources, rawDest)
+	if err != nil {
+		return Options{}, err
+	}
+	opts.Sources = cleanedSources
+	opts.Dest = cleanedDest
 
 	return opts, nil
 }

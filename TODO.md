@@ -17,7 +17,7 @@ Tracking per-phase tasks from specs/recopy_plan.md. Use checkboxes to mark progr
 
 ## Phase 3 – Operation Planner
 - [x] T3.1 Planner DAG + deterministic ordering (rename/reflink/rsync heuristics wired)
-- [ ] T3.2 Safety checks (dest inside src, trailing slash normalization)
+- [x] T3.2 Safety checks (dest inside src guard + trailing slash normalization)
 
 ## Phase 4 – Rsync Capability + Args
 - [ ] T4.1 Local/remote rsync version detector
