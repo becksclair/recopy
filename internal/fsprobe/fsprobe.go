@@ -1,8 +1,14 @@
 package fsprobe
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
 
 const btrfsSuperMagic = 0x9123683E
+
+// ErrSparseUnsupported indicates FIEMAP/holes probing is unavailable.
+var ErrSparseUnsupported = errors.New("fsprobe: sparse detection unsupported")
 
 // Info bundles Btrfs traits for a path.
 type Info struct {

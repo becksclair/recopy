@@ -10,6 +10,7 @@ type ArgsOptions struct {
 	RemoveSource bool
 	Inplace      bool
 	Profile      string // auto|lan|wan
+	PreferSparse bool
 }
 
 // BuildArgs returns the argv slice for invoking rsync.
@@ -39,6 +40,9 @@ func BuildArgs(opts ArgsOptions, caps Capabilities) ([]string, error) {
 	}
 	if opts.RemoveSource {
 		args = append(args, "--remove-source-files")
+	}
+	if opts.PreferSparse {
+		args = append(args, "--sparse")
 	}
 	compression := compressionMode(opts.Profile)
 	switch compression {

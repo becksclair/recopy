@@ -27,6 +27,17 @@ func TestBuildArgsMirror(t *testing.T) {
 	}
 }
 
+func TestBuildArgsSparse(t *testing.T) {
+	caps := Capabilities{}
+	args, err := BuildArgs(ArgsOptions{Source: "a", Dest: "b", PreferSparse: true}, caps)
+	if err != nil {
+		t.Fatalf("build args failed: %v", err)
+	}
+	if !contains(args, "--sparse") {
+		t.Fatalf("expected --sparse flag, got %v", args)
+	}
+}
+
 func contains(list []string, item string) bool {
 	for _, s := range list {
 		if s == item {

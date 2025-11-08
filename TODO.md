@@ -22,7 +22,7 @@ Tracking per-phase tasks from specs/recopy_plan.md. Use checkboxes to mark progr
 ## Phase 4 – Rsync Capability + Args
 - [x] T4.1 Local rsync version detector (remote TBD)
 - [x] T4.2 Arg builder with profile-aware compression + CLI preview
-- [ ] T4.3 FIEMAP sparse detector integration
+- [x] T4.3 FIEMAP sparse detector integration
 
 ## Phase 5 – Rsync Output Parsing
 - [ ] T5.1 progress2 parser feeding UI

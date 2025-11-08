@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 
+	"recopy/internal/fsprobe"
 	"recopy/internal/plan"
 	"recopy/internal/rsync"
 )
@@ -71,6 +72,16 @@ func Run(args []string) int {
 	for i, step := range executionPlan.Steps {
 		fmt.Fprintf(os.Stdout, "%02d. %-12s %s -> %s [%s]\n", i+1, step.Kind, strings.Join(step.Sources, ","), step.Dest, step.Reason)
 		if step.Kind == plan.StepRsync {
+			var sparse bool
+			if len(step.Sources) == 1 {
+				if info, err := os.Stat(step.Sources[0]); err == nil && info.Mode().IsRegular() {
+					if ok, err := fsprobe.HasSparseData(step.Sources[0]); err == nil {
+						sparse = ok
+					} else if !errors.Is(err, fsprobe.ErrSparseUnsupported) {
+						fmt.Fprintf(os.Stderr, "recopy: warning: sparse probe failed for %s: %v\n", step.Sources[0], err)
+					}
+				}
+			}
 			args, err := rsync.BuildArgs(rsync.ArgsOptions{
 				Source:       step.Sources[0],
 				Dest:         step.Dest,
@@ -78,6 +89,7 @@ func Run(args []string) int {
 				RemoveSource: opts.Move,
 				Inplace:      opts.Inplace,
 				Profile:      string(opts.Profile),
+				PreferSparse: sparse,
 			}, caps)
 			if err == nil {
 				fmt.Fprintf(os.Stdout, "    rsync: %s\n", strings.Join(args, " "))
