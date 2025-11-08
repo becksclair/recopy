@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -8,6 +9,7 @@ import (
 	"strings"
 
 	"recopy/internal/plan"
+	"recopy/internal/rsync"
 )
 
 // Profile represents the performance presets exposed on the CLI.
@@ -45,6 +47,11 @@ func Run(args []string) int {
 		return 2
 	}
 
+	caps, err := rsync.DetectLocal(context.Background())
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "recopy: warning: rsync detection failed:", err)
+	}
+
 	planInput := plan.Input{
 		Sources: opts.Sources,
 		Dest:    opts.Dest,
@@ -63,6 +70,19 @@ func Run(args []string) int {
 	fmt.Fprintf(os.Stdout, "recopy plan (%d steps):\n", len(executionPlan.Steps))
 	for i, step := range executionPlan.Steps {
 		fmt.Fprintf(os.Stdout, "%02d. %-12s %s -> %s [%s]\n", i+1, step.Kind, strings.Join(step.Sources, ","), step.Dest, step.Reason)
+		if step.Kind == plan.StepRsync {
+			args, err := rsync.BuildArgs(rsync.ArgsOptions{
+				Source:       step.Sources[0],
+				Dest:         step.Dest,
+				Mirror:       opts.Mirror,
+				RemoveSource: opts.Move,
+				Inplace:      opts.Inplace,
+				Profile:      string(opts.Profile),
+			}, caps)
+			if err == nil {
+				fmt.Fprintf(os.Stdout, "    rsync: %s\n", strings.Join(args, " "))
+			}
+		}
 	}
 	return 0
 }

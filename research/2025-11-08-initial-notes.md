@@ -19,6 +19,7 @@
 - Bubble Tea RC introduces renderer refactors and keyboard enhancement messages, so `/internal/tui` should abstract over these APIs early to simplify future upgrades.
 - Planner baseline: deterministic ordering (alphabetical sources), rename when `--move` and SameDevice succeeds, fallback to reflink when allowed, else rsync; auto transport adds btrfs offer step when both ends are btrfs and source looks like a subvolume.
 - CLI now normalizes root/relative paths (filepath.Clean) and forbids destinations that reside inside any source tree to prevent recursive hazards.
+- Rsync detector parses `rsync --version` output to gate optional flags (zstd, `--mkpath`, `--preallocate`, `--compress-choice`), and the arg builder emits baseline flags from the spec. CLI prints synthesized rsync commands for each `rsync` step to aid debugging.
 
 ## Outstanding Questions
 1. Need scripted instructions for installing Go 1.25.3 + Charm RC deps in CI/dev images.
