@@ -21,6 +21,7 @@
 - Planner baseline: deterministic ordering (alphabetical sources), rename when `--move` and SameDevice succeeds, fallback to reflink when allowed, else rsync; auto transport adds btrfs offer step when both ends are btrfs and source looks like a subvolume.
 - CLI now normalizes root/relative paths (filepath.Clean) and forbids destinations that reside inside any source tree to prevent recursive hazards.
 - Rsync detector parses `rsync --version` output to gate optional flags (zstd, `--mkpath`, `--preallocate`, `--compress-choice`), and the arg builder emits baseline flags from the spec. CLI prints synthesized rsync commands for each `rsync` step to aid debugging.
+- Rsync parser now covers `--info=progress2` totals plus `--out-format=%i|%l|%n%L` events, emitting structured counters for the forthcoming UI (unit tests use golden fixture logs).
 
 ## Outstanding Questions
 1. Need scripted instructions for installing Go 1.25.3 + Charm RC deps in CI/dev images.

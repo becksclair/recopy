@@ -1,0 +1,8 @@
+sending incremental file list
+./
+>f+++++++++|11|docs/README.md
+      524,288  10%    3.76MB/s    0:00:01 (xfr#1, to-chk=4/5)
+>f..t......|2048|docs/link -> ../target
+  5,242,880  12%   32.61MB/s    0:00:03 (xfr#2, to-chk=3/5)
+sent 12,345 bytes  received 678 bytes  2.34MB/s
+total size is 123456  speedup is 9.99

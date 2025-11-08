@@ -25,9 +25,9 @@ Tracking per-phase tasks from specs/recopy_plan.md. Use checkboxes to mark progr
 - [x] T4.3 FIEMAP sparse detector integration
 
 ## Phase 5 – Rsync Output Parsing
-- [ ] T5.1 progress2 parser feeding UI
-- [ ] T5.2 `--out-format` parser for item events
-- [ ] T5.3 Golden tests with fixture logs
+- [x] T5.1 progress2 parser feeding UI
+- [x] T5.2 `--out-format` parser for item events
+- [x] T5.3 Golden tests with fixture logs
 
 ## Phase 6 – TUI Shell
 - [ ] T6.1 Bubble Tea shell (header/body/footer)
