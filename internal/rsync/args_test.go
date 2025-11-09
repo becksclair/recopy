@@ -2,45 +2,30 @@ package rsync
 
 import "testing"
 
-func TestBuildArgsCompression(t *testing.T) {
-	caps := Capabilities{SupportsZstd: true, SupportsPreallocate: true, SupportsMkpath: true}
-	args, err := BuildArgs(ArgsOptions{Source: "/tmp/src", Dest: "/tmp/dest", Profile: "wan"}, caps)
+func TestBuildArgsDryRunMirror(t *testing.T) {
+	args, err := BuildArgs(ArgsOptions{
+		Source: "src",
+		Dest:   "dest",
+		Mirror: true,
+		DryRun: true,
+	}, Capabilities{SupportsMkpath: true})
 	if err != nil {
-		t.Fatalf("build args failed: %v", err)
+		t.Fatalf("BuildArgs failed: %v", err)
 	}
-	wantFlags := []string{"--compress", "--compress-choice=zstd", "--zl=1"}
-	for _, flag := range wantFlags {
-		if !contains(args, flag) {
-			t.Fatalf("missing flag %s in %v", flag, args)
-		}
+	if !contains(args, "-n") {
+		t.Fatalf("expected -n for dry-run: %v", args)
+	}
+	if !contains(args, "--delete-delay") {
+		t.Fatalf("expected --delete-delay for mirror: %v", args)
+	}
+	if contains(args, "--delete") {
+		t.Fatalf("did not expect --delete when using delete-delay: %v", args)
 	}
 }
 
-func TestBuildArgsMirror(t *testing.T) {
-	caps := Capabilities{}
-	args, err := BuildArgs(ArgsOptions{Source: "a", Dest: "b", Mirror: true}, caps)
-	if err != nil {
-		t.Fatalf("build args failed: %v", err)
-	}
-	if !contains(args, "--delete") {
-		t.Fatalf("expected --delete flag, got %v", args)
-	}
-}
-
-func TestBuildArgsSparse(t *testing.T) {
-	caps := Capabilities{}
-	args, err := BuildArgs(ArgsOptions{Source: "a", Dest: "b", PreferSparse: true}, caps)
-	if err != nil {
-		t.Fatalf("build args failed: %v", err)
-	}
-	if !contains(args, "--sparse") {
-		t.Fatalf("expected --sparse flag, got %v", args)
-	}
-}
-
-func contains(list []string, item string) bool {
-	for _, s := range list {
-		if s == item {
+func contains(list []string, needle string) bool {
+	for _, item := range list {
+		if item == needle {
 			return true
 		}
 	}

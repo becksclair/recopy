@@ -28,7 +28,7 @@ Requirements:
 ## Status
 - ✅ Go 1.25 toolchain + CLI parser + planner/executor stack (reflink, rsync, move paths, Bubble Tea shell)
 - ✅ Remote path normalization plus rsync capability probing on remote hosts
-- ✅ Btrfs offers gated via CLI prompt with snapshot + send/receive pipeline (TUI modal still TODO)
+- ✅ Btrfs offers gated via CLI prompt or TUI modal with snapshot + send/receive pipeline
 - 🚧 Dry-run/mirror plumbing, parallel workers, errors/signals, and packaging/docs
 
 ## License

@@ -11,13 +11,14 @@ import (
 
 // RunOptions controls Bubble Tea shell behavior.
 type RunOptions struct {
-	Plan        plan.Plan
-	Mode        string
-	Profile     string
-	Transport   string
-	Mirror      bool
-	DryRun      bool
-	InitialLogs []string
+	Plan            plan.Plan
+	Mode            string
+	Profile         string
+	Transport       string
+	Mirror          bool
+	DryRun          bool
+	InitialLogs     []string
+	OnBtrfsDecision func(src, dest string, accepted bool)
 }
 
 // LogMsg appends a line to the drawer; future exec paths can emit this.

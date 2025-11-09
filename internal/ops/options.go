@@ -7,11 +7,11 @@ type Options struct {
 	Sources []string
 	Dest    string
 
-	Profile string
-	Mirror  bool
-	Move    bool
-	Inplace bool
-	DryRun  bool
+	Profile      string
+	Mirror       bool
+	Move         bool
+	Inplace      bool
+	DryRun       bool
 	BtrfsDecider BtrfsDecider
 
 	Stdout io.Writer

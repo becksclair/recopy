@@ -11,6 +11,10 @@ import (
 )
 
 func (e Executor) handleBtrfsOffer(ctx context.Context, src, dest string, opts Options) error {
+	if opts.DryRun {
+		fmt.Fprintf(opts.stdout(), "dry-run: would replicate via btrfs %s -> %s\n", src, dest)
+		return nil
+	}
 	if opts.BtrfsDecider == nil {
 		fmt.Fprintf(opts.stdout(), "btrfs offer skipped (no prompt configured) for %s\n", src)
 		return nil

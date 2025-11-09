@@ -5,19 +5,30 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
+
+	"recopy/internal/plan"
 )
 
 type model struct {
-	opts     RunOptions
-	cursor   int
-	logs     []string
-	showLog  bool
-	showHelp bool
-	frozen   bool
+	opts        RunOptions
+	cursor      int
+	logs        []string
+	showLog     bool
+	showHelp    bool
+	frozen      bool
+	offers      []offerState
+	showOffer   bool
+	activeOffer int
 }
 
 func newModel(opts RunOptions) model {
-	return model{opts: opts, logs: append([]string(nil), opts.InitialLogs...)}
+	m := model{opts: opts, logs: append([]string(nil), opts.InitialLogs...)}
+	m.offers = collectOffers(opts.Plan)
+	if len(m.offers) > 0 {
+		m.showOffer = true
+		m.activeOffer = nextPendingOffer(m.offers)
+	}
+	return m
 }
 
 func (m model) Init() tea.Cmd {
@@ -27,7 +38,13 @@ func (m model) Init() tea.Cmd {
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		switch msg.String() {
+		key := msg.String()
+		if m.showOffer {
+			if handled := m.handleOfferKey(key); handled {
+				return m, nil
+			}
+		}
+		switch key {
 		case "ctrl+c", "q":
 			return m, tea.Quit
 		case "down", "j":
@@ -44,8 +61,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.showHelp = !m.showHelp
 		case "F":
 			m.frozen = !m.frozen
+		case "o":
+			if len(m.offers) > 0 {
+				m.showOffer = true
+				m.activeOffer = nextPendingOffer(m.offers)
+			}
 		case "esc":
 			m.showHelp = false
+			m.showOffer = false
 		}
 	case LogMsg:
 		if msg.Line != "" {
@@ -97,7 +120,10 @@ func (m model) View() tea.View {
 		b.WriteString(renderHelp())
 		b.WriteString("\n")
 	}
-	b.WriteString("Keys: ↑/↓ select • v log • F freeze • ? help • q quit\n")
+	if m.showOffer {
+		b.WriteString(renderOfferModal(m.currentOffer()))
+	}
+	b.WriteString("Keys: ↑/↓ select • v log • F freeze • o offers • ? help • q quit\n")
 	if m.showLog {
 		b.WriteString(renderLogs(m.logs))
 	}
@@ -146,6 +172,105 @@ func renderLogs(logs []string) string {
 		b.WriteString("  · ")
 		b.WriteString(line)
 		b.WriteString("\n")
+	}
+	return b.String()
+}
+
+type offerState struct {
+	Step     plan.Step
+	Decision decision
+}
+
+type decision int
+
+const (
+	decisionPending decision = iota
+	decisionAccepted
+	decisionDeclined
+)
+
+func collectOffers(pl plan.Plan) []offerState {
+	var out []offerState
+	for _, step := range pl.Steps {
+		if step.Kind == plan.StepBtrfsOffer {
+			out = append(out, offerState{Step: step, Decision: decisionPending})
+		}
+	}
+	return out
+}
+
+func nextPendingOffer(offers []offerState) int {
+	for i, off := range offers {
+		if off.Decision == decisionPending {
+			return i
+		}
+	}
+	return 0
+}
+
+func (m *model) handleOfferKey(key string) bool {
+	if len(m.offers) == 0 || !m.showOffer {
+		return false
+	}
+	switch key {
+	case "y", "Y":
+		m.setOfferDecision(decisionAccepted)
+		return true
+	case "n", "N":
+		m.setOfferDecision(decisionDeclined)
+		return true
+	case "tab":
+		m.activeOffer = (m.activeOffer + 1) % len(m.offers)
+		return true
+	case "esc":
+		m.showOffer = false
+		return true
+	}
+	return false
+}
+
+func (m *model) setOfferDecision(dec decision) {
+	if m.activeOffer < 0 || m.activeOffer >= len(m.offers) {
+		return
+	}
+	m.offers[m.activeOffer].Decision = dec
+	if m.opts.OnBtrfsDecision != nil {
+		accepted := dec == decisionAccepted
+		src := m.offers[m.activeOffer].Step.Sources[0]
+		dest := m.offers[m.activeOffer].Step.Dest
+		m.opts.OnBtrfsDecision(src, dest, accepted)
+	}
+	if idx := nextPendingOffer(m.offers); m.offers[idx].Decision == decisionPending {
+		m.activeOffer = idx
+	} else {
+		m.showOffer = false
+	}
+}
+
+func (m model) currentOffer() *offerState {
+	if m.activeOffer < 0 || m.activeOffer >= len(m.offers) {
+		return nil
+	}
+	return &m.offers[m.activeOffer]
+}
+
+func renderOfferModal(off *offerState) string {
+	if off == nil {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("\nBTRFS OFFER\n")
+	b.WriteString(strings.Repeat("-", 20))
+	b.WriteString("\n")
+	fmt.Fprintf(&b, "Source: %s\nDest:   %s\n", off.Step.Sources[0], off.Step.Dest)
+	b.WriteString("[y] accept • [n] decline • [tab] next offer • [esc] close\n")
+	switch off.Decision {
+	case decisionAccepted:
+		b.WriteString("Decision: accepted\n")
+	case decisionDeclined:
+		b.WriteString("Decision: declined\n")
+	default:
+		b.WriteString("Decision: pending\n")
 	}
 	return b.String()
 }

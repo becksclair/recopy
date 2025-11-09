@@ -65,7 +65,7 @@ func (e Executor) Run(ctx context.Context, pl plan.Plan, opts Options) error {
 				return err
 			}
 		case plan.StepRename:
-			if err := e.handleRename(src, target); err != nil {
+			if err := e.handleRename(src, target, opts); err != nil {
 				return err
 			}
 		case plan.StepBtrfsOffer:
@@ -80,6 +80,10 @@ func (e Executor) Run(ctx context.Context, pl plan.Plan, opts Options) error {
 }
 
 func (e Executor) handleReflink(ctx context.Context, src, dest string, opts Options) error {
+	if opts.DryRun {
+		fmt.Fprintf(opts.stdout(), "dry-run: would reflink %s -> %s\n", src, dest)
+		return nil
+	}
 	info, err := statPath(src)
 	if err != nil {
 		return err
@@ -114,14 +118,16 @@ func (e Executor) handleRsync(ctx context.Context, src, dest string, opts Option
 			}
 		}
 	}
+	removeSource := opts.Move && !opts.DryRun
 	args, err := rsync.BuildArgs(rsync.ArgsOptions{
 		Source:       sourceArg,
 		Dest:         dest,
 		Mirror:       opts.Mirror,
-		RemoveSource: opts.Move,
+		RemoveSource: removeSource,
 		Inplace:      opts.Inplace,
 		Profile:      opts.Profile,
 		PreferSparse: preferSparse,
+		DryRun:       opts.DryRun,
 	}, e.caps)
 	if err != nil {
 		return err
@@ -129,7 +135,7 @@ func (e Executor) handleRsync(ctx context.Context, src, dest string, opts Option
 	if err := runCommand(ctx, args, opts.stdout(), opts.stderr()); err != nil {
 		return err
 	}
-	if opts.Move && !srcRemote {
+	if opts.Move && !srcRemote && !opts.DryRun {
 		if err := mv.PruneEmptyDirs([]string{src}); err != nil {
 			return fmt.Errorf("prune %s: %w", src, err)
 		}
@@ -137,7 +143,11 @@ func (e Executor) handleRsync(ctx context.Context, src, dest string, opts Option
 	return nil
 }
 
-func (e Executor) handleRename(src, dest string) error {
+func (e Executor) handleRename(src, dest string, opts Options) error {
+	if opts.DryRun {
+		fmt.Fprintf(opts.stdout(), "dry-run: would rename %s -> %s\n", src, dest)
+		return nil
+	}
 	if err := mv.Rename(src, dest); err != nil {
 		return fmt.Errorf("rename %s -> %s: %w", src, dest, err)
 	}

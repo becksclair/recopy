@@ -11,6 +11,7 @@ type ArgsOptions struct {
 	Inplace      bool
 	Profile      string // auto|lan|wan
 	PreferSparse bool
+	DryRun       bool
 }
 
 // BuildArgs returns the argv slice for invoking rsync.
@@ -33,7 +34,7 @@ func BuildArgs(opts ArgsOptions, caps Capabilities) ([]string, error) {
 		args = append(args, "--preallocate")
 	}
 	if opts.Mirror {
-		args = append(args, "--delete")
+		args = append(args, "--delete-delay")
 	}
 	if opts.Inplace {
 		args = append(args, "--inplace")
@@ -43,6 +44,9 @@ func BuildArgs(opts ArgsOptions, caps Capabilities) ([]string, error) {
 	}
 	if opts.PreferSparse {
 		args = append(args, "--sparse")
+	}
+	if opts.DryRun {
+		args = append(args, "-n")
 	}
 	compression := compressionMode(opts.Profile)
 	switch compression {

@@ -84,6 +84,7 @@ func Run(args []string) int {
 		return 2
 	}
 
+	decisions := newBtrfsDecisions()
 	if opts.DryRun && shouldUseTUI(opts) {
 		uiErr := tui.Run(context.Background(), tui.RunOptions{
 			Plan:      executionPlan,
@@ -92,19 +93,17 @@ func Run(args []string) int {
 			Transport: opts.Transport,
 			Mirror:    opts.Mirror,
 			DryRun:    opts.DryRun,
+			OnBtrfsDecision: func(src, dest string, accepted bool) {
+				decisions.Set(src, dest, accepted)
+			},
 		})
 		if uiErr != nil {
 			fmt.Fprintln(os.Stderr, "recopy: warning: tui failed, falling back to plain output:", uiErr)
-			printPlanSummary(os.Stdout, executionPlan, opts, caps)
 		}
-		return 0
 	}
 	printPlanSummary(os.Stdout, executionPlan, opts, caps)
-	if opts.DryRun {
-		return 0
-	}
 	executor := ops.NewExecutor(caps)
-	btrfsDecider := newBtrfsDecider(executionPlan)
+	btrfsDecider := newBtrfsDecider(executionPlan, decisions)
 	execOpts := ops.Options{
 		Sources:      opts.Sources,
 		Dest:         opts.Dest,
@@ -120,6 +119,10 @@ func Run(args []string) int {
 	if err := executor.Run(context.Background(), executionPlan, execOpts); err != nil {
 		fmt.Fprintln(os.Stderr, "recopy: execution failed:", err)
 		return 1
+	}
+	if opts.DryRun {
+		fmt.Fprintln(os.Stdout, "recopy: dry-run completed")
+		return 0
 	}
 	fmt.Fprintln(os.Stdout, "recopy: completed")
 	return 0
@@ -220,21 +223,21 @@ func modeLabel(opts Options) string {
 	return "copy"
 }
 
-func newBtrfsDecider(pl plan.Plan) ops.BtrfsDecider {
+func newBtrfsDecider(pl plan.Plan, decisions *btrfsDecisions) ops.BtrfsDecider {
 	if !hasBtrfsOffer(pl) {
 		return nil
 	}
-	if !term.IsTerminal(int(os.Stdin.Fd())) {
-		fmt.Fprintln(os.Stderr, "recopy: btrfs fast path available but stdin is not a TTY; skipping offer")
-		return nil
-	}
-	reader := bufio.NewReader(os.Stdin)
-	cache := make(map[string]bool)
 	return func(src, dest string) (bool, error) {
-		key := src + "->" + dest
-		if val, ok := cache[key]; ok {
-			return val, nil
+		if decisions != nil {
+			if val, ok := decisions.Get(src, dest); ok {
+				return val, nil
+			}
 		}
+		if !term.IsTerminal(int(os.Stdin.Fd())) {
+			fmt.Fprintln(os.Stderr, "recopy: btrfs fast path available but stdin is not a TTY; skipping offer")
+			return false, nil
+		}
+		reader := bufio.NewReader(os.Stdin)
 		fmt.Fprintf(os.Stdout, "Btrfs fast path available for %s -> %s. Use it? [y/N]: ", src, dest)
 		line, err := reader.ReadString('\n')
 		if err != nil {
@@ -242,7 +245,9 @@ func newBtrfsDecider(pl plan.Plan) ops.BtrfsDecider {
 		}
 		answer := strings.ToLower(strings.TrimSpace(line))
 		accept := answer == "y" || answer == "yes"
-		cache[key] = accept
+		if decisions != nil {
+			decisions.Set(src, dest, accept)
+		}
 		return accept, nil
 	}
 }
@@ -254,6 +259,33 @@ func hasBtrfsOffer(pl plan.Plan) bool {
 		}
 	}
 	return false
+}
+
+type btrfsDecisions struct {
+	values map[string]bool
+}
+
+func newBtrfsDecisions() *btrfsDecisions {
+	return &btrfsDecisions{values: make(map[string]bool)}
+}
+
+func (d *btrfsDecisions) Set(src, dest string, accepted bool) {
+	if d == nil {
+		return
+	}
+	d.values[d.key(src, dest)] = accepted
+}
+
+func (d *btrfsDecisions) Get(src, dest string) (bool, bool) {
+	if d == nil {
+		return false, false
+	}
+	val, ok := d.values[d.key(src, dest)]
+	return val, ok
+}
+
+func (d *btrfsDecisions) key(src, dest string) string {
+	return src + "->" + dest
 }
 
 func printPlanSummary(w io.Writer, executionPlan plan.Plan, opts Options, caps rsync.Capabilities) {
@@ -275,10 +307,11 @@ func printPlanSummary(w io.Writer, executionPlan plan.Plan, opts Options, caps r
 				Source:       step.Sources[0],
 				Dest:         step.Dest,
 				Mirror:       opts.Mirror,
-				RemoveSource: opts.Move,
+				RemoveSource: opts.Move && !opts.DryRun,
 				Inplace:      opts.Inplace,
 				Profile:      string(opts.Profile),
 				PreferSparse: sparse,
+				DryRun:       opts.DryRun,
 			}, caps)
 			if err == nil {
 				fmt.Fprintf(w, "    rsync: %s\n", strings.Join(args, " "))

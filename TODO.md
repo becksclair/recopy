@@ -48,12 +48,12 @@ Tracking per-phase tasks from specs/recopy_plan.md. Use checkboxes to mark progr
 
 ## Phase 10 – Btrfs Offers
 - [x] T10.1 Offer gating + heuristics
-- [ ] T10.2 TUI modal for offer accept/refuse
+- [x] T10.2 TUI modal for offer accept/refuse
 - [x] T10.3 Send/receive pipeline + fallback
 
 ## Phase 11 – Modes (Dry/Mirror)
-- [ ] T11.1 `--dry-run` plumbing + UI badge
-- [ ] T11.2 `--mirror` plan adjustments
+- [x] T11.1 `--dry-run` plumbing + UI badge
+- [x] T11.2 `--mirror` plan adjustments
 
 ## Phase 12 – Parallelism
 - [ ] T12.1 Manual `--parallel` orchestrator
