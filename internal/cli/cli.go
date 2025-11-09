@@ -12,6 +12,7 @@ import (
 	"golang.org/x/term"
 
 	"recopy/internal/fsprobe"
+	"recopy/internal/ops"
 	"recopy/internal/plan"
 	"recopy/internal/rsync"
 	"recopy/internal/tui"
@@ -72,7 +73,7 @@ func Run(args []string) int {
 		return 2
 	}
 
-	if shouldUseTUI(opts) {
+	if opts.DryRun && shouldUseTUI(opts) {
 		uiErr := tui.Run(context.Background(), tui.RunOptions{
 			Plan:      executionPlan,
 			Mode:      modeLabel(opts),
@@ -88,6 +89,26 @@ func Run(args []string) int {
 		return 0
 	}
 	printPlanSummary(os.Stdout, executionPlan, opts, caps)
+	if opts.DryRun {
+		return 0
+	}
+	executor := ops.NewExecutor(caps)
+	execOpts := ops.Options{
+		Sources: opts.Sources,
+		Dest:    opts.Dest,
+		Profile: string(opts.Profile),
+		Mirror:  opts.Mirror,
+		Move:    opts.Move,
+		Inplace: opts.Inplace,
+		DryRun:  opts.DryRun,
+		Stdout:  os.Stdout,
+		Stderr:  os.Stderr,
+	}
+	if err := executor.Run(context.Background(), executionPlan, execOpts); err != nil {
+		fmt.Fprintln(os.Stderr, "recopy: execution failed:", err)
+		return 1
+	}
+	fmt.Fprintln(os.Stdout, "recopy: completed")
 	return 0
 }
 

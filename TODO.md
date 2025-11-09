@@ -35,8 +35,8 @@ Tracking per-phase tasks from specs/recopy_plan.md. Use checkboxes to mark progr
 - [x] T6.3 Non-TTY fallback mode
 
 ## Phase 7 – Copy Ops
-- [ ] T7.1 Reflink copy op + metadata fixup
-- [ ] T7.2 Rsync copy op integration
+- [x] T7.1 Reflink copy op + metadata fixup
+- [x] T7.2 Rsync copy op integration
 
 ## Phase 8 – Move Ops
 - [ ] T8.1 Rename fast-path orchestrator
