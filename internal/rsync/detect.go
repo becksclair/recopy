@@ -7,6 +7,8 @@ import (
 	"errors"
 	"os/exec"
 	"regexp"
+
+	"recopy/internal/remotepath"
 )
 
 // Version holds parsed rsync version numbers.
@@ -30,6 +32,17 @@ var versionRegex = regexp.MustCompile(`rsync\s+version\s+(\d+)\.(\d+)\.(\d+)`)
 // DetectLocal executes `rsync --version` and infers feature gates.
 func DetectLocal(ctx context.Context) (Capabilities, error) {
 	cmd := exec.CommandContext(ctx, "rsync", "--version")
+	out, err := cmd.Output()
+	if err != nil {
+		return Capabilities{}, err
+	}
+	return parseCapabilities(out)
+}
+
+// DetectRemote probes rsync capabilities on a remote host via ssh.
+func DetectRemote(ctx context.Context, spec remotepath.Spec) (Capabilities, error) {
+	addr := spec.Address()
+	cmd := exec.CommandContext(ctx, "ssh", addr, "LC_ALL=C", "rsync", "--version")
 	out, err := cmd.Output()
 	if err != nil {
 		return Capabilities{}, err
@@ -85,6 +98,30 @@ func (v Version) AtLeast(major, minor, patch int) bool {
 		return v.Minor > minor
 	}
 	return v.Patch >= patch
+}
+
+// LessThan reports whether v < other.
+func (v Version) LessThan(other Version) bool {
+	if v.Major != other.Major {
+		return v.Major < other.Major
+	}
+	if v.Minor != other.Minor {
+		return v.Minor < other.Minor
+	}
+	return v.Patch < other.Patch
+}
+
+// IntersectCaps returns the shared feature set between two endpoints.
+func IntersectCaps(a, b Capabilities) Capabilities {
+	result := a
+	if b.Version.LessThan(a.Version) {
+		result.Version = b.Version
+	}
+	result.SupportsZstd = a.SupportsZstd && b.SupportsZstd
+	result.SupportsMkpath = a.SupportsMkpath && b.SupportsMkpath
+	result.SupportsChecksumChoice = a.SupportsChecksumChoice && b.SupportsChecksumChoice
+	result.SupportsPreallocate = a.SupportsPreallocate && b.SupportsPreallocate
+	return result
 }
 
 func atoi(s string) int {

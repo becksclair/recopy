@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+
+	"recopy/internal/remotepath"
 )
 
 func normalizePaths(sources []string, dest string) ([]string, string, error) {
@@ -12,6 +14,15 @@ func normalizePaths(sources []string, dest string) ([]string, string, error) {
 	for i, src := range sources {
 		if src == "" {
 			return nil, "", fmt.Errorf("source path %d is empty", i)
+		}
+		spec, remote, err := remotepath.Parse(src)
+		if err != nil {
+			return nil, "", err
+		}
+		if remote {
+			cleanedSources[i] = spec.String()
+			absSources[i] = ""
+			continue
 		}
 		cleaned := filepath.Clean(src)
 		cleanedSources[i] = cleaned
@@ -25,14 +36,27 @@ func normalizePaths(sources []string, dest string) ([]string, string, error) {
 	if dest == "" {
 		return nil, "", fmt.Errorf("destination path is empty")
 	}
-	cleanedDest := filepath.Clean(dest)
-	absDest, err := filepath.Abs(cleanedDest)
+	spec, destRemote, err := remotepath.Parse(dest)
 	if err != nil {
-		return nil, "", fmt.Errorf("resolve destination %q: %w", dest, err)
+		return nil, "", err
+	}
+	cleanedDest := dest
+	absDest := ""
+	if destRemote {
+		cleanedDest = spec.String()
+	} else {
+		cleanedDest = filepath.Clean(dest)
+		absDest, err = filepath.Abs(cleanedDest)
+		if err != nil {
+			return nil, "", fmt.Errorf("resolve destination %q: %w", dest, err)
+		}
 	}
 
 	sep := string(filepath.Separator)
 	for i, absSrc := range absSources {
+		if absSrc == "" || absDest == "" {
+			continue
+		}
 		if absDest == absSrc || strings.HasPrefix(absDest, absSrc+sep) {
 			return nil, "", fmt.Errorf("destination %q is inside source %q", cleanedDest, cleanedSources[i])
 		}

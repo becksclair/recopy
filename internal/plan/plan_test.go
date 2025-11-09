@@ -69,6 +69,34 @@ func TestBuildDeterministicOrdering(t *testing.T) {
 	}
 }
 
+func TestBuildRemoteDestinationForcesRsync(t *testing.T) {
+	res, err := Build(Input{
+		Sources: []string{"/tmp/src"},
+		Dest:    "user@host:/data",
+		Options: Options{Move: true, Transport: "auto"},
+	})
+	if err != nil {
+		t.Fatalf("build failed: %v", err)
+	}
+	if len(res.Steps) != 1 || res.Steps[0].Kind != StepRsync {
+		t.Fatalf("expected rsync step for remote dest, got %#v", res.Steps)
+	}
+}
+
+func TestBuildRemoteSourcesRequireRsync(t *testing.T) {
+	res, err := Build(Input{
+		Sources: []string{"host:/src"},
+		Dest:    "/tmp/dest",
+		Options: Options{Transport: "auto"},
+	})
+	if err != nil {
+		t.Fatalf("build failed: %v", err)
+	}
+	if len(res.Steps) != 1 || res.Steps[0].Kind != StepRsync {
+		t.Fatalf("expected rsync step, got %#v", res.Steps)
+	}
+}
+
 func mustWriteFile(t *testing.T, path string) {
 	t.Helper()
 	if err := mkdir(filepath.Dir(path)); err != nil {

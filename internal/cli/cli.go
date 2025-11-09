@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"flag"
@@ -14,6 +15,7 @@ import (
 	"recopy/internal/fsprobe"
 	"recopy/internal/ops"
 	"recopy/internal/plan"
+	"recopy/internal/remotepath"
 	"recopy/internal/rsync"
 	"recopy/internal/tui"
 )
@@ -43,6 +45,7 @@ type Options struct {
 	NoUI          bool
 	Sources       []string
 	Dest          string
+	Remote        remotepath.Layout
 }
 
 // Run parses CLI args, validates basic invariants, and prints a short summary.
@@ -56,6 +59,14 @@ func Run(args []string) int {
 	caps, err := rsync.DetectLocal(context.Background())
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "recopy: warning: rsync detection failed:", err)
+	}
+	if opts.Remote.Side != remotepath.SideNone {
+		remoteCaps, rerr := rsync.DetectRemote(context.Background(), opts.Remote.Spec)
+		if rerr != nil {
+			fmt.Fprintln(os.Stderr, "recopy: warning: remote rsync detection failed:", rerr)
+		} else {
+			caps = rsync.IntersectCaps(caps, remoteCaps)
+		}
 	}
 
 	planInput := plan.Input{
@@ -93,16 +104,18 @@ func Run(args []string) int {
 		return 0
 	}
 	executor := ops.NewExecutor(caps)
+	btrfsDecider := newBtrfsDecider(executionPlan)
 	execOpts := ops.Options{
-		Sources: opts.Sources,
-		Dest:    opts.Dest,
-		Profile: string(opts.Profile),
-		Mirror:  opts.Mirror,
-		Move:    opts.Move,
-		Inplace: opts.Inplace,
-		DryRun:  opts.DryRun,
-		Stdout:  os.Stdout,
-		Stderr:  os.Stderr,
+		Sources:      opts.Sources,
+		Dest:         opts.Dest,
+		Profile:      string(opts.Profile),
+		Mirror:       opts.Mirror,
+		Move:         opts.Move,
+		Inplace:      opts.Inplace,
+		DryRun:       opts.DryRun,
+		BtrfsDecider: btrfsDecider,
+		Stdout:       os.Stdout,
+		Stderr:       os.Stderr,
 	}
 	if err := executor.Run(context.Background(), executionPlan, execOpts); err != nil {
 		fmt.Fprintln(os.Stderr, "recopy: execution failed:", err)
@@ -162,6 +175,11 @@ func Parse(args []string) (Options, error) {
 	}
 	opts.Sources = cleanedSources
 	opts.Dest = cleanedDest
+	layout, err := remotepath.ClassifyPaths(opts.Sources, opts.Dest)
+	if err != nil {
+		return Options{}, err
+	}
+	opts.Remote = layout
 
 	return opts, nil
 }
@@ -200,6 +218,42 @@ func modeLabel(opts Options) string {
 		return "move"
 	}
 	return "copy"
+}
+
+func newBtrfsDecider(pl plan.Plan) ops.BtrfsDecider {
+	if !hasBtrfsOffer(pl) {
+		return nil
+	}
+	if !term.IsTerminal(int(os.Stdin.Fd())) {
+		fmt.Fprintln(os.Stderr, "recopy: btrfs fast path available but stdin is not a TTY; skipping offer")
+		return nil
+	}
+	reader := bufio.NewReader(os.Stdin)
+	cache := make(map[string]bool)
+	return func(src, dest string) (bool, error) {
+		key := src + "->" + dest
+		if val, ok := cache[key]; ok {
+			return val, nil
+		}
+		fmt.Fprintf(os.Stdout, "Btrfs fast path available for %s -> %s. Use it? [y/N]: ", src, dest)
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			return false, err
+		}
+		answer := strings.ToLower(strings.TrimSpace(line))
+		accept := answer == "y" || answer == "yes"
+		cache[key] = accept
+		return accept, nil
+	}
+}
+
+func hasBtrfsOffer(pl plan.Plan) bool {
+	for _, step := range pl.Steps {
+		if step.Kind == plan.StepBtrfsOffer {
+			return true
+		}
+	}
+	return false
 }
 
 func printPlanSummary(w io.Writer, executionPlan plan.Plan, opts Options, caps rsync.Capabilities) {

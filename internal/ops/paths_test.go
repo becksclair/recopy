@@ -45,3 +45,31 @@ func TestPathResolverSingleSourceFile(t *testing.T) {
 		t.Fatalf("want %s, got %s", dest, target)
 	}
 }
+
+func TestPathResolverRemoteDestMultiSource(t *testing.T) {
+	resolver, err := newPathResolver([]string{"local1", "local2"}, "user@host:/uploads/")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	target, err := resolver.TargetFor("local1")
+	if err != nil {
+		t.Fatalf("target err: %v", err)
+	}
+	if target != "user@host:/uploads/local1" {
+		t.Fatalf("unexpected target: %s", target)
+	}
+}
+
+func TestPathResolverRemoteDestSingleFile(t *testing.T) {
+	resolver, err := newPathResolver([]string{"local"}, "host:/tmp/out.bin")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	target, err := resolver.TargetFor("local")
+	if err != nil {
+		t.Fatalf("target err: %v", err)
+	}
+	if target != "host:/tmp/out.bin" {
+		t.Fatalf("unexpected target: %s", target)
+	}
+}

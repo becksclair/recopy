@@ -6,6 +6,7 @@ import (
 	"sort"
 
 	"recopy/internal/fsprobe"
+	"recopy/internal/remotepath"
 )
 
 // Kind represents a planned action.
@@ -54,18 +55,26 @@ func Build(in Input) (Plan, error) {
 	if len(in.Sources) == 0 {
 		return Plan{}, fmt.Errorf("plan: no sources provided")
 	}
-	destParent := filepath.Dir(in.Dest)
-
-	destReflink := fsprobe.SupportsReflink(destParent)
-	destBtrfs, _ := fsprobe.BtrfsInfo(destParent)
+	_, destRemote, err := remotepath.Parse(in.Dest)
+	if err != nil {
+		return Plan{}, err
+	}
+	destParent := ""
+	destReflink := false
+	destBtrfs := fsprobe.Info{}
+	if !destRemote {
+		destParent = filepath.Dir(in.Dest)
+		destReflink = fsprobe.SupportsReflink(destParent)
+		destBtrfs, _ = fsprobe.BtrfsInfo(destParent)
+	}
 
 	sorted := append([]string(nil), in.Sources...)
 	sort.Strings(sorted)
 
 	var out Plan
 	for _, src := range sorted {
-		srcInfo := gatherSourceInfo(src, destParent)
-		if shouldOfferBtrfs(in, srcInfo, destBtrfs) {
+		srcInfo := gatherSourceInfo(src, destParent, destRemote)
+		if shouldOfferBtrfs(in, srcInfo, destBtrfs, destRemote) {
 			out.Steps = append(out.Steps, Step{
 				Kind:    StepBtrfsOffer,
 				Sources: []string{src},
@@ -75,14 +84,14 @@ func Build(in Input) (Plan, error) {
 		}
 
 		switch {
-		case in.Options.Move && srcInfo.sameDevice:
+		case !destRemote && !srcInfo.remote && in.Options.Move && srcInfo.sameDevice:
 			out.Steps = append(out.Steps, Step{
 				Kind:    StepRename,
 				Sources: []string{src},
 				Dest:    in.Dest,
 				Reason:  "move on same device",
 			})
-		case srcInfo.sameDevice && !in.Options.NoReflink && srcInfo.reflinkOK && destReflink:
+		case !destRemote && !srcInfo.remote && srcInfo.sameDevice && !in.Options.NoReflink && srcInfo.reflinkOK && destReflink:
 			out.Steps = append(out.Steps, Step{
 				Kind:    StepReflink,
 				Sources: []string{src},
@@ -103,23 +112,32 @@ func Build(in Input) (Plan, error) {
 }
 
 type sourceInfo struct {
+	remote     bool
 	sameDevice bool
 	reflinkOK  bool
 	btrfs      fsprobe.Info
 }
 
-func gatherSourceInfo(src, destParent string) sourceInfo {
-	same, err := fsprobe.SameDevice(src, destParent)
-	if err != nil {
-		same = false
+func gatherSourceInfo(src, destParent string, destRemote bool) sourceInfo {
+	if _, ok, err := remotepath.Parse(src); err == nil && ok {
+		return sourceInfo{remote: true}
 	}
-	reflink := fsprobe.SupportsReflink(src)
-	btrfs, _ := fsprobe.BtrfsInfo(src)
-	return sourceInfo{sameDevice: same, reflinkOK: reflink, btrfs: btrfs}
+	info := sourceInfo{}
+	if destParent != "" && !destRemote {
+		if same, err := fsprobe.SameDevice(src, destParent); err == nil {
+			info.sameDevice = same
+		}
+	}
+	info.reflinkOK = fsprobe.SupportsReflink(src)
+	info.btrfs, _ = fsprobe.BtrfsInfo(src)
+	return info
 }
 
-func shouldOfferBtrfs(in Input, src sourceInfo, dest fsprobe.Info) bool {
+func shouldOfferBtrfs(in Input, src sourceInfo, dest fsprobe.Info, destRemote bool) bool {
 	if in.Options.Transport != "auto" {
+		return false
+	}
+	if src.remote || destRemote {
 		return false
 	}
 	if !src.btrfs.IsBtrfs || !dest.IsBtrfs {

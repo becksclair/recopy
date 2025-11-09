@@ -8,18 +8,21 @@ import (
 	"path/filepath"
 
 	"recopy/internal/fsprobe"
+	"recopy/internal/mv"
 	"recopy/internal/plan"
+	"recopy/internal/remotepath"
 	"recopy/internal/rsync"
 )
 
 // Executor runs plan steps using reflink and rsync helpers.
 type Executor struct {
-	caps rsync.Capabilities
+	caps      rsync.Capabilities
+	completed map[string]bool
 }
 
 // NewExecutor constructs an Executor with rsync capabilities.
 func NewExecutor(caps rsync.Capabilities) Executor {
-	return Executor{caps: caps}
+	return Executor{caps: caps, completed: make(map[string]bool)}
 }
 
 // Run executes the plan in order.
@@ -38,6 +41,7 @@ func (e Executor) Run(ctx context.Context, pl plan.Plan, opts Options) error {
 		if err != nil {
 			return err
 		}
+		key := stepKey(src, target)
 
 		fmt.Fprintf(opts.stdout(), "[%s] %s -> %s\n", step.Kind, src, target)
 		switch step.Kind {
@@ -53,13 +57,21 @@ func (e Executor) Run(ctx context.Context, pl plan.Plan, opts Options) error {
 				return fmt.Errorf("reflink %s -> %s: %w", src, target, err)
 			}
 		case plan.StepRsync:
+			if e.completed[key] {
+				fmt.Fprintf(opts.stdout(), "rsync skipped, already handled via btrfs for %s\n", src)
+				continue
+			}
 			if err := e.handleRsync(ctx, src, target, opts); err != nil {
 				return err
 			}
 		case plan.StepRename:
-			return fmt.Errorf("rename steps not implemented yet")
+			if err := e.handleRename(src, target); err != nil {
+				return err
+			}
 		case plan.StepBtrfsOffer:
-			fmt.Fprintf(opts.stdout(), "skipping btrfs-offer step for now: %s\n", src)
+			if err := e.handleBtrfsOffer(ctx, src, target, opts); err != nil {
+				return err
+			}
 		default:
 			return fmt.Errorf("unsupported step kind %s", step.Kind)
 		}
@@ -82,18 +94,24 @@ func (e Executor) handleRsync(ctx context.Context, src, dest string, opts Option
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
-	if err := ensureParentDir(dest); err != nil {
-		return err
+	srcRemote := remotepath.IsRemote(src)
+	destRemote := remotepath.IsRemote(dest)
+	if !destRemote {
+		if err := ensureParentDir(dest); err != nil {
+			return err
+		}
 	}
 	preferSparse := false
 	sourceArg := src
-	if info, err := statPath(src); err == nil {
-		if info.Mode().IsRegular() {
-			if ok, err := fsprobe.HasSparseData(src); err == nil {
-				preferSparse = ok
+	if !srcRemote {
+		if info, err := statPath(src); err == nil {
+			if info.Mode().IsRegular() {
+				if ok, err := fsprobe.HasSparseData(src); err == nil {
+					preferSparse = ok
+				}
+			} else if info.IsDir() {
+				sourceArg = filepath.Clean(src) + string(os.PathSeparator)
 			}
-		} else if info.IsDir() {
-			sourceArg = filepath.Clean(src) + string(os.PathSeparator)
 		}
 	}
 	args, err := rsync.BuildArgs(rsync.ArgsOptions{
@@ -108,7 +126,22 @@ func (e Executor) handleRsync(ctx context.Context, src, dest string, opts Option
 	if err != nil {
 		return err
 	}
-	return runCommand(ctx, args, opts.stdout(), opts.stderr())
+	if err := runCommand(ctx, args, opts.stdout(), opts.stderr()); err != nil {
+		return err
+	}
+	if opts.Move && !srcRemote {
+		if err := mv.PruneEmptyDirs([]string{src}); err != nil {
+			return fmt.Errorf("prune %s: %w", src, err)
+		}
+	}
+	return nil
+}
+
+func (e Executor) handleRename(src, dest string) error {
+	if err := mv.Rename(src, dest); err != nil {
+		return fmt.Errorf("rename %s -> %s: %w", src, dest, err)
+	}
+	return nil
 }
 
 func statPath(path string) (fileInfo, error) {
@@ -120,3 +153,7 @@ func ensureParentDir(path string) error {
 }
 
 var errReflinkUnsupported = errors.New("reflink unsupported")
+
+func stepKey(src, dest string) string {
+	return src + "->" + dest
+}

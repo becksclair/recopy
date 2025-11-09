@@ -36,3 +36,18 @@ func TestNormalizePathsRejectsDestInsideSource(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
+
+func TestNormalizePathsRemote(t *testing.T) {
+	src := []string{"user@host:/data"}
+	dest := "/local"
+	cleanedSrc, cleanedDest, err := normalizePaths(src, dest)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cleanedSrc[0] != "user@host:/data" {
+		t.Fatalf("remote source mutated: %s", cleanedSrc[0])
+	}
+	if cleanedDest != dest {
+		t.Fatalf("dest changed: %s", cleanedDest)
+	}
+}

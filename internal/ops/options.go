@@ -12,10 +12,14 @@ type Options struct {
 	Move    bool
 	Inplace bool
 	DryRun  bool
+	BtrfsDecider BtrfsDecider
 
 	Stdout io.Writer
 	Stderr io.Writer
 }
+
+// BtrfsDecider decides whether to accept a btrfs offer for a source/dest pair.
+type BtrfsDecider func(src, dest string) (bool, error)
 
 func (o Options) stdout() io.Writer {
 	if o.Stdout != nil {

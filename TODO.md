@@ -39,17 +39,17 @@ Tracking per-phase tasks from specs/recopy_plan.md. Use checkboxes to mark progr
 - [x] T7.2 Rsync copy op integration
 
 ## Phase 8 – Move Ops
-- [ ] T8.1 Rename fast-path orchestrator
-- [ ] T8.2 Rsync + prune move path
+- [x] T8.1 Rename fast-path orchestrator
+- [x] T8.2 Rsync + prune move path
 
 ## Phase 9 – Remote Paths
-- [ ] T9.1 Remote path normalization + parsing
-- [ ] T9.2 Remote feature probe wiring
+- [x] T9.1 Remote path normalization + parsing
+- [x] T9.2 Remote feature probe wiring
 
 ## Phase 10 – Btrfs Offers
-- [ ] T10.1 Offer gating + heuristics
+- [x] T10.1 Offer gating + heuristics
 - [ ] T10.2 TUI modal for offer accept/refuse
-- [ ] T10.3 Send/receive pipeline + fallback
+- [x] T10.3 Send/receive pipeline + fallback
 
 ## Phase 11 – Modes (Dry/Mirror)
 - [ ] T11.1 `--dry-run` plumbing + UI badge
@@ -76,6 +76,6 @@ Tracking per-phase tasks from specs/recopy_plan.md. Use checkboxes to mark progr
 - [ ] T16.2 Man page + `recopy doctor`
 
 ## Cross-Cutting Decisions
-- [ ] Upgrade toolchain to Go 1.25.3 and update build scripts
+- [x] Upgrade toolchain to Go 1.25.3 and update build scripts
 - [ ] Adopt Bubble Tea v2 RC + matching Bubbles/Lip Gloss imports
-- [ ] Define minimum supported rsync (3.2.7) and OpenSSH (9.6p1) versions for Ubuntu 24.04 hosts
+- [x] Define minimum supported rsync (3.2.7) and OpenSSH (9.6p1) versions for Ubuntu 24.04 hosts

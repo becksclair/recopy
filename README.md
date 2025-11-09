@@ -5,6 +5,9 @@ recopy is a fast, resumable replacement for `cp`/`mv` that stitches together loc
 ## Quick start
 
 ```bash
+# Install the pinned toolchain
+mise install
+
 # Build the CLI
 GOEXPERIMENT=all go build ./cmd/recopy
 
@@ -13,7 +16,7 @@ GOEXPERIMENT=all go build ./cmd/recopy
 ```
 
 Requirements:
-- Go 1.25.3+
+- `mise` (reads `.mise.toml` and installs Go 1.25.3)
 - Runtime tools: `rsync`, `ssh`, optional `btrfs` utils (future phases)
 
 ## Development workflow
@@ -23,9 +26,10 @@ Requirements:
 4. Implement the smallest piece that demonstrates value; update the checklist and research notes as you go.
 
 ## Status
-- ✅ Repo scaffolded for Go 1.25
-- 🚧 CLI parser prints normalized options (no execution plan yet)
-- ⏳ Planner, filesystem probes, rsync integration, and UI work pending
+- ✅ Go 1.25 toolchain + CLI parser + planner/executor stack (reflink, rsync, move paths, Bubble Tea shell)
+- ✅ Remote path normalization plus rsync capability probing on remote hosts
+- ✅ Btrfs offers gated via CLI prompt with snapshot + send/receive pipeline (TUI modal still TODO)
+- 🚧 Dry-run/mirror plumbing, parallel workers, errors/signals, and packaging/docs
 
 ## License
 MIT — see `LICENSE`.
