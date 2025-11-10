@@ -28,3 +28,7 @@ depends = ["fmt", "vet", "test"]
 [tasks.bench]
 description = "Run the local benchmark harness"
 run = "go run ./cmd/bench"
+
+[tasks.build-static]
+description = "Build a CGO-disabled recopy binary into dist/recopy"
+run = "mkdir -p dist && CGO_ENABLED=0 go build -trimpath -ldflags '-s -w' -o dist/recopy ./cmd/recopy"

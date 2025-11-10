@@ -37,6 +37,13 @@ Requirements:
 3. Skim the `/research` notes for recent decisions (toolchain, deps, probes).
 4. Implement the smallest piece that demonstrates value; update the checklist and research notes as you go.
 
+## Packaging & Extras
+
+- `mise run build-static` — produces a CGO-disabled binary at `dist/recopy` for distribution.
+- Shell completions live in `completions/recopy.bash` and `completions/recopy.zsh`; source them (or drop into your shell's completions dir) for flag hints.
+- The man page ships at `docs/recopy.1` (`man ./docs/recopy.1` for a local preview).
+- Run `recopy doctor` to check that rsync/ssh/btrfs/hyperfine are available before kicking off big transfers.
+
 ## Status
 
 - ✅ Go 1.25 toolchain + CLI parser + planner/executor stack (reflink, rsync, move paths, Bubble Tea shell)

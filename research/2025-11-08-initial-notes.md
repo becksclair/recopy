@@ -42,3 +42,7 @@
 - `cmd/bench` (via `mise run bench`) now seeds a 64×2 MiB dataset, then hands both `cp -a` and `recopy --parallel=N --profile` to `hyperfine` so we get comparative charts plus Markdown/JSON exports (defaults land in the temp workspace).
 - Latest `hyperfine` sample (runs=5, warmup=1, tmpfs `/tmp`): `cp -a` ≈40 ms (≈3.19 GiB/s) vs `recopy --parallel=1 --profile auto --no-ui` ≈153 ms (≈0.83 GiB/s). These numbers track raw syscall overhead we can optimize later.
 - Harness still exposes `--keep` for artifact inspection and now accepts `--runs`, `--warmup`, `--export-md`, and `--export-json` for custom reports.
+
+## Packaging & Docs — 2025-11-10
+- Added `mise run build-static` (CGO=0) to spit binaries into `dist/recopy` plus bash/zsh completion scripts under `completions/` and a lightweight `docs/recopy.1` man page.
+- Introduced `recopy doctor`, which probes rsync/ssh/btrfs/hyperfine readiness so users can diagnose missing dependencies quickly.

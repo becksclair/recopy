@@ -75,6 +75,14 @@ func Run(args []string) int {
 		}
 	}()
 
+	if len(args) > 0 && args[0] == "doctor" {
+		if len(args) > 1 {
+			fmt.Fprintln(os.Stderr, "recopy: doctor does not accept additional arguments")
+			return 2
+		}
+		return runDoctor(ctx)
+	}
+
 	opts, err := Parse(args)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "recopy:", err)
@@ -228,7 +236,8 @@ func validateProfile(p Profile) error {
 }
 
 func usageSynopsis() string {
-	return "Usage: recopy [--move] [--dry-run] [--mirror]\n" +
+	return "Usage: recopy doctor\n" +
+		"       recopy [--move] [--dry-run] [--mirror]\n" +
 		"               [--profile auto|lan|wan]\n" +
 		"               [--no-reflink] [--inplace]\n" +
 		"               [--parallel N]\n" +

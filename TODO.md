@@ -89,8 +89,8 @@ Tracking per-phase tasks from specs/recopy_plan.md. Use checkboxes to mark progr
 
 ## Phase 16 – Packaging & Docs
 
-- [ ] T16.1 Static builds + shell completions
-- [ ] T16.2 Man page + `recopy doctor`
+- [x] T16.1 Static builds + shell completions
+- [x] T16.2 Man page + `recopy doctor`
 
 ## Cross-Cutting Decisions
 

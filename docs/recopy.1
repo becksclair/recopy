@@ -1,0 +1,50 @@
+.TH RECOPY 1 "November 2025" "recopy project"
+.SH NAME
+recopy \- smart cp/mv replacement with reflink, rsync, and btrfs fast paths.
+.SH SYNOPSIS
+.B recopy
+.RI [ options ] " SRC... DEST"
+.br
+.B recopy doctor
+.SH DESCRIPTION
+recopy plans copy or move operations using rename/reflink fast paths locally and rsync or btrfs send/receive remotely. The CLI mirrors familiar cp semantics while exposing flags to control transport, parallelism, verification, and UI output.
+.PP
+The
+.B doctor
+subcommand inspects common runtime dependencies (rsync, ssh, optional btrfs + hyperfine) and reports readiness for typical workflows.
+.SH OPTIONS
+.TP
+.B --move
+Prefer rename when SRC and DEST share a filesystem; fallback to rsync.
+.TP
+.B --dry-run
+Plan only and show the execution steps without mutating data.
+.TP
+.B --mirror
+Delete extraneous files from DEST similar to rsync --delete-delay.
+.TP
+.B --profile auto|lan|wan
+Apply compression + prescan presets.
+.TP
+.B --parallel N
+Limit worker count for rsync transfers (default 1).
+.TP
+.B --transport auto|rsync|btrfs
+Force a transport or let recopy choose.
+.TP
+.B --no-reflink
+Disable reflink attempts even when supported.
+.TP
+.B --inplace
+Use rsync --inplace instead of temp files.
+.TP
+.B --prescan, --verify, --one-file-system, --no-ui
+Fine tune metadata scanning, verification, traversal, and TUI output.
+.SH FILES
+The repository ships sample shell completions under
+.I completions/
+for bash and zsh users, plus this man page at
+.I docs/recopy.1
+for local installs.
+.SH SEE ALSO
+cp(1), mv(1), rsync(1), btrfs(8)
