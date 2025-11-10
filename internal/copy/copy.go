@@ -53,6 +53,16 @@ func File(src, dest string, info FileInfo, opts Options) error {
 		return fmt.Errorf("copy_file_range %s: %w", src, err)
 	}
 
+	// Try sendfile as another zero-copy option before falling back to buffered copy
+	if err := trySendfile(src, dest, info); err == nil {
+		if opts.PreserveAll {
+			return preserveMetadata(dest, info)
+		}
+		return nil
+	} else if !errors.Is(err, ErrNotSupported) {
+		return fmt.Errorf("sendfile %s: %w", src, err)
+	}
+
 	// Fall back to buffered copy
 	if err := bufferedCopy(src, dest, info, opts); err != nil {
 		return fmt.Errorf("buffered copy %s: %w", src, err)
