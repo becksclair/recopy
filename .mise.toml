@@ -32,3 +32,37 @@ run = "go run ./cmd/bench"
 [tasks.build-static]
 description = "Build a CGO-disabled recopy binary into dist/recopy"
 run = "mkdir -p dist && CGO_ENABLED=0 go build -trimpath -ldflags '-s -w' -o dist/recopy ./cmd/recopy"
+
+[tasks.bench-profile]
+description = "Run benchmark with perf stat profiling"
+run = '''
+  mkdir -p bench-results
+  echo "Building recopy..."
+  go build ./cmd/recopy
+  echo "Running benchmark with perf stat..."
+  perf stat -d -d go run ./cmd/bench --dataset=mixed --export-json=bench-results/mixed-$(date +%Y%m%d-%H%M%S).json
+'''
+
+[tasks.bench-trace]
+description = "Run benchmark with perf record for detailed profiling"
+run = '''
+  mkdir -p bench-results
+  echo "Building recopy..."
+  go build ./cmd/recopy
+  echo "Running benchmark with perf record..."
+  perf record -F 99 -g go run ./cmd/bench --dataset=mixed --keep
+  echo "Profiling data saved to perf.data (use 'perf report' to view)"
+'''
+
+[tasks.bench-all-datasets]
+description = "Run benchmarks across all dataset types"
+run = '''
+  mkdir -p bench-results
+  go build ./cmd/recopy
+  timestamp=$(date +%Y%m%d-%H%M%S)
+  for dataset in mixed tiny large sparse; do
+    echo "Benchmarking dataset: $dataset"
+    go run ./cmd/bench --dataset=$dataset --export-json=bench-results/${dataset}-${timestamp}.json --export-md=bench-results/${dataset}-${timestamp}.md
+  done
+  echo "Results stored in bench-results/"
+'''

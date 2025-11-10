@@ -17,6 +17,8 @@ const (
 	StepRename Kind = "rename"
 	// StepReflink clones blocks via reflink when supported by the filesystem.
 	StepReflink Kind = "reflink"
+	// StepCopy performs local copy using copy_file_range and other kernel zero-copy mechanisms.
+	StepCopy Kind = "copy"
 	// StepRsync copies data via rsync.
 	StepRsync Kind = "rsync"
 	// StepBtrfsOffer proposes a send/receive fast path for subvolumes.
@@ -83,6 +85,9 @@ func Build(in Input) (Plan, error) {
 			})
 		}
 
+		// Check if user forced rsync transport explicitly
+		forceRsync := in.Options.Transport == "rsync"
+
 		switch {
 		case !destRemote && !srcInfo.remote && in.Options.Move && srcInfo.sameDevice:
 			out.Steps = append(out.Steps, Step{
@@ -97,6 +102,14 @@ func Build(in Input) (Plan, error) {
 				Sources: []string{src},
 				Dest:    in.Dest,
 				Reason:  "reflink fast path",
+			})
+		case !destRemote && !srcInfo.remote && srcInfo.sameDevice && !forceRsync:
+			// Local same-device copy without reflink support: use copy engine
+			out.Steps = append(out.Steps, Step{
+				Kind:    StepCopy,
+				Sources: []string{src},
+				Dest:    in.Dest,
+				Reason:  "local copy engine (copy_file_range)",
 			})
 		default:
 			out.Steps = append(out.Steps, Step{

@@ -74,6 +74,40 @@ func runDoctor(ctx context.Context) int {
 				return "hyperfine available", nil
 			},
 		},
+		{
+			Name:   "perf",
+			Advice: "install linux-tools-common for profiling (see docs/perf.md)",
+			Run: func(context.Context) (string, error) {
+				if _, err := exec.LookPath("perf"); err != nil {
+					return "", err
+				}
+				return "perf available", nil
+			},
+		},
+		{
+			Name:   "kernel: copy_file_range",
+			Advice: "upgrade to kernel ≥5.10 for zero-copy support",
+			Run: func(context.Context) (string, error) {
+				if supported, err := probeCopyFileRange(); err != nil {
+					return "", err
+				} else if !supported {
+					return "", fmt.Errorf("not supported")
+				}
+				return "supported", nil
+			},
+		},
+		{
+			Name:   "kernel: io_uring",
+			Advice: "upgrade to kernel ≥5.10 for advanced async I/O (optional)",
+			Run: func(context.Context) (string, error) {
+				if supported, err := probeIOUring(); err != nil {
+					return "", err
+				} else if !supported {
+					return "", fmt.Errorf("not supported")
+				}
+				return "supported", nil
+			},
+		},
 	}
 
 	fmt.Println("recopy doctor:")

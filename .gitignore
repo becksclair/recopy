@@ -13,6 +13,11 @@ recopy
 *.test
 *.out
 
+# Benchmark results and profiling data
+/bench-results/
+perf.data
+perf.data.old
+
 # Go module cache artifacts
 vendor/
 

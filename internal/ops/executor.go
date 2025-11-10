@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sync"
 
+	"recopy/internal/copy"
 	"recopy/internal/fsprobe"
 	"recopy/internal/mv"
 	"recopy/internal/plan"
@@ -135,6 +136,10 @@ func (e Executor) runWithDispatcher(ctx context.Context, pl plan.Plan, opts Opti
 				}
 				return err
 			}
+		case plan.StepCopy:
+			if err := e.handleCopy(ctx, src, target, opts); err != nil {
+				return err
+			}
 		case plan.StepRsync:
 			if e.completed[key] {
 				fmt.Fprintf(opts.stdout(), "rsync skipped, already handled via btrfs for %s\n", src)
@@ -242,6 +247,77 @@ func (e Executor) handleRename(src, dest string, opts Options) error {
 		return wrapStepError(plan.StepRename, src, dest, fmt.Errorf("rename %s -> %s: %w", src, dest, err))
 	}
 	return nil
+}
+
+func (e Executor) handleCopy(ctx context.Context, src, dest string, opts Options) error {
+	if opts.DryRun {
+		fmt.Fprintf(opts.stdout(), "dry-run: would copy %s -> %s\n", src, dest)
+		return nil
+	}
+
+	info, err := statPath(src)
+	if err != nil {
+		return wrapStepError(plan.StepCopy, src, dest, err)
+	}
+
+	if info.IsDir() {
+		// For directories, walk and copy all files
+		return e.copyDirectory(ctx, src, dest, opts)
+	}
+
+	// Single file copy
+	if err := ensureParentDir(dest); err != nil {
+		return wrapStepError(plan.StepCopy, src, dest, err)
+	}
+
+	copyOpts := copy.Options{
+		PreserveAll: true, // Always preserve metadata like cp -a
+		Sparse:      false,
+	}
+
+	if err := copy.File(src, dest, info, copyOpts); err != nil {
+		return wrapStepError(plan.StepCopy, src, dest, err)
+	}
+
+	return nil
+}
+
+func (e Executor) copyDirectory(ctx context.Context, src, dest string, opts Options) error {
+	// Walk the source directory and copy all files
+	return filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		// Check context cancellation
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+
+		// Compute relative path and destination
+		relPath, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+		targetPath := filepath.Join(dest, relPath)
+
+		// Create directories
+		if info.IsDir() {
+			return mkdirAll(targetPath)
+		}
+
+		// Copy files
+		copyOpts := copy.Options{
+			PreserveAll: true,
+			Sparse:      false,
+		}
+
+		if err := copy.File(path, targetPath, info, copyOpts); err != nil {
+			return fmt.Errorf("copy %s: %w", path, err)
+		}
+
+		return nil
+	})
 }
 
 func statPath(path string) (fileInfo, error) {
