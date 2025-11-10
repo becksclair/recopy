@@ -1,0 +1,12 @@
+#!/bin/sh
+for arg in "$@"; do
+  if [ "$arg" = "--version" ]; then
+    printf 'rsync  version 3.2.7  protocol version 31\n'
+    printf 'Copyright (C) 1996-2023 by Andrew Tridgell, Wayne Davison, and others.\n'
+    exit 0
+  fi
+  if [ "$arg" = "--server" ]; then
+    exit 0
+  fi
+done
+exit 0

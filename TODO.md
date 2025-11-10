@@ -80,7 +80,7 @@ Tracking per-phase tasks from specs/recopy_plan.md. Use checkboxes to mark progr
 ## Phase 14 – Testing Matrix
 
 - [x] T14.1 Unit tests for CLI, planner, parser
-- [ ] T14.2 Integration tests local/remote matrix
+- [x] T14.2 Integration tests local/remote matrix
 
 ## Phase 15 – Performance
 
