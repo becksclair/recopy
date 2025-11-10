@@ -36,7 +36,7 @@
 ## 1) CLI & Profiles (Surface Area Freeze for v1)
 
 **CLI**
-```
+```text
 recopy [--move] [--dry-run] [--mirror]
        [--profile auto|lan|wan]
        [--no-reflink] [--inplace]
@@ -510,4 +510,3 @@ recopy [--move] [--dry-run] [--mirror]
 ---
 
 **End of Plan (v1 → v1.1)**
-
