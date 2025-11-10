@@ -1,5 +1,5 @@
-# Binaries
-recopy
+# Binaries (but allow cmd/recopy/ source directory)
+/recopy
 *.exe
 *.exe~
 *.dll
