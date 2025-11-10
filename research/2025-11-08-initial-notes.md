@@ -28,6 +28,12 @@
 - Plan execution now routes through `internal/ops`: StepReflink attempts `FICLONE` per file (preserving ownership + mtimes) and falls back to rsync on unsupported filesystems/dirs, while StepRsync shells out via the existing arg builder; `--dry-run` sticks to planning/TUI only.
 - Rsync parser now covers `--info=progress2` totals plus `--out-format=%i|%l|%n%L` events, emitting structured counters for the forthcoming UI (unit tests use golden fixture logs).
 
+## Parallelism & Error Handling — 2025-11-09
+- Manual `--parallel N` spins up an rsync worker pool; planner steps act as deterministic partitions so workers never duplicate sources. Non-rsync steps still run sequentially for safety.
+- Bubble Tea dry-run shell now surfaces the configured worker count (`WORKERS N`) to set expectations for multi-worker runs.
+- Executor wraps external command failures in `ops.StepError`/`CommandError`, preserving rsync exit codes so the CLI can exit with the same status.
+- `runCommand` sends SIGINT on cancellation and escalates to SIGKILL after a short grace period; CLI now traps ctrl+c (first cancels, second exits with 130).
+
 ## Outstanding Questions
 1. (resolved) `mise` covers installing Go 1.25.3; Charm RC deps stay managed via `go mod`.
 2. (resolved) Minimum remote rsync/OpenSSH versions match Ubuntu (3.2.7 / 9.6p1) so no duplicate code paths are required.

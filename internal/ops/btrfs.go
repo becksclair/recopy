@@ -2,12 +2,15 @@ package ops
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"time"
+
+	"recopy/internal/plan"
 )
 
 func (e Executor) handleBtrfsOffer(ctx context.Context, src, dest string, opts Options) error {
@@ -28,7 +31,10 @@ func (e Executor) handleBtrfsOffer(ctx context.Context, src, dest string, opts O
 		return nil
 	}
 	if err := btrfsReplicate(ctx, src, dest, opts.stdout(), opts.stderr()); err != nil {
-		return err
+		if errors.Is(err, context.Canceled) {
+			return err
+		}
+		return wrapStepError(plan.StepBtrfsOffer, src, dest, err)
 	}
 	e.completed[stepKey(src, dest)] = true
 	return nil

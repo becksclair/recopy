@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
 	"strings"
 
 	"golang.org/x/term"
@@ -50,18 +51,42 @@ type Options struct {
 
 // Run parses CLI args, validates basic invariants, and prints a short summary.
 func Run(args []string) int {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	sigCh := make(chan os.Signal, 2)
+	signal.Notify(sigCh, os.Interrupt)
+	defer signal.Stop(sigCh)
+	go func() {
+		count := 0
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-sigCh:
+				count++
+				if count == 1 {
+					fmt.Fprintln(os.Stderr, "recopy: interrupt received, shutting down (press ctrl+c again to force)")
+					cancel()
+					continue
+				}
+				fmt.Fprintln(os.Stderr, "recopy: force exit")
+				os.Exit(130)
+			}
+		}
+	}()
+
 	opts, err := Parse(args)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "recopy:", err)
 		return 2
 	}
 
-	caps, err := rsync.DetectLocal(context.Background())
+	caps, err := rsync.DetectLocal(ctx)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "recopy: warning: rsync detection failed:", err)
 	}
 	if opts.Remote.Side != remotepath.SideNone {
-		remoteCaps, rerr := rsync.DetectRemote(context.Background(), opts.Remote.Spec)
+		remoteCaps, rerr := rsync.DetectRemote(ctx, opts.Remote.Spec)
 		if rerr != nil {
 			fmt.Fprintln(os.Stderr, "recopy: warning: remote rsync detection failed:", rerr)
 		} else {
@@ -86,13 +111,14 @@ func Run(args []string) int {
 
 	decisions := newBtrfsDecisions()
 	if opts.DryRun && shouldUseTUI(opts) {
-		uiErr := tui.Run(context.Background(), tui.RunOptions{
+		uiErr := tui.Run(ctx, tui.RunOptions{
 			Plan:      executionPlan,
 			Mode:      modeLabel(opts),
 			Profile:   string(opts.Profile),
 			Transport: opts.Transport,
 			Mirror:    opts.Mirror,
 			DryRun:    opts.DryRun,
+			Workers:   opts.Parallel,
 			OnBtrfsDecision: func(src, dest string, accepted bool) {
 				decisions.Set(src, dest, accepted)
 			},
@@ -112,13 +138,18 @@ func Run(args []string) int {
 		Move:         opts.Move,
 		Inplace:      opts.Inplace,
 		DryRun:       opts.DryRun,
+		Parallel:     opts.Parallel,
 		BtrfsDecider: btrfsDecider,
 		Stdout:       os.Stdout,
 		Stderr:       os.Stderr,
 	}
-	if err := executor.Run(context.Background(), executionPlan, execOpts); err != nil {
+	if err := executor.Run(ctx, executionPlan, execOpts); err != nil {
+		if errors.Is(err, context.Canceled) {
+			fmt.Fprintln(os.Stderr, "recopy: interrupted")
+			return 130
+		}
 		fmt.Fprintln(os.Stderr, "recopy: execution failed:", err)
-		return 1
+		return exitCodeFrom(err)
 	}
 	if opts.DryRun {
 		fmt.Fprintln(os.Stdout, "recopy: dry-run completed")
@@ -290,6 +321,7 @@ func (d *btrfsDecisions) key(src, dest string) string {
 
 func printPlanSummary(w io.Writer, executionPlan plan.Plan, opts Options, caps rsync.Capabilities) {
 	fmt.Fprintf(w, "recopy plan (%d steps):\n", len(executionPlan.Steps))
+	fmt.Fprintf(w, "parallel workers: %d\n", opts.Parallel)
 	for i, step := range executionPlan.Steps {
 		fmt.Fprintf(w, "%02d. %-12s %s -> %s [%s]\n", i+1, step.Kind, strings.Join(step.Sources, ","), step.Dest, step.Reason)
 		if step.Kind == plan.StepRsync {
@@ -318,4 +350,21 @@ func printPlanSummary(w io.Writer, executionPlan plan.Plan, opts Options, caps r
 			}
 		}
 	}
+}
+
+type exitCoder interface {
+	ExitCode() int
+}
+
+func exitCodeFrom(err error) int {
+	if err == nil {
+		return 0
+	}
+	var coder exitCoder
+	if errors.As(err, &coder) {
+		if code := coder.ExitCode(); code > 0 {
+			return code
+		}
+	}
+	return 1
 }

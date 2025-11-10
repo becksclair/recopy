@@ -17,6 +17,7 @@ type RunOptions struct {
 	Transport       string
 	Mirror          bool
 	DryRun          bool
+	Workers         int
 	InitialLogs     []string
 	OnBtrfsDecision func(src, dest string, accepted bool)
 }

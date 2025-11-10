@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"recopy/internal/fsprobe"
 	"recopy/internal/mv"
@@ -31,8 +32,86 @@ func (e Executor) Run(ctx context.Context, pl plan.Plan, opts Options) error {
 	if err != nil {
 		return err
 	}
+	parallel := opts.Parallel
+	if parallel < 1 {
+		parallel = 1
+	}
+	if parallel == 1 {
+		return e.runSequential(ctx, pl, opts, resolver)
+	}
+	return e.runParallel(ctx, pl, opts, resolver, parallel)
+}
 
+func (e Executor) runSequential(ctx context.Context, pl plan.Plan, opts Options, resolver *pathResolver) error {
+	dispatch := func(src, dest string) error {
+		return e.handleRsync(ctx, src, dest, opts)
+	}
+	return e.runWithDispatcher(ctx, pl, opts, resolver, dispatch)
+}
+
+func (e Executor) runParallel(ctx context.Context, pl plan.Plan, opts Options, resolver *pathResolver, workers int) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	tasks := make(chan rsyncTask)
+	errCh := make(chan error, 1)
+	var wg sync.WaitGroup
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for task := range tasks {
+				if ctx.Err() != nil {
+					return
+				}
+				if err := e.handleRsync(ctx, task.src, task.dest, opts); err != nil {
+					if errors.Is(err, context.Canceled) {
+						cancel()
+						return
+					}
+					select {
+					case errCh <- err:
+					default:
+					}
+					cancel()
+					return
+				}
+			}
+		}()
+	}
+
+	dispatch := func(src, dest string) error {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case tasks <- rsyncTask{src: src, dest: dest}:
+			return nil
+		}
+	}
+
+	runErr := e.runWithDispatcher(ctx, pl, opts, resolver, dispatch)
+	close(tasks)
+	wg.Wait()
+	if runErr != nil {
+		return runErr
+	}
+	select {
+	case workerErr := <-errCh:
+		if workerErr != nil {
+			return workerErr
+		}
+	default:
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (e Executor) runWithDispatcher(ctx context.Context, pl plan.Plan, opts Options, resolver *pathResolver, dispatch func(src, dest string) error) error {
 	for _, step := range pl.Steps {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if len(step.Sources) != 1 {
 			return fmt.Errorf("step %s expects single source", step.Kind)
 		}
@@ -49,19 +128,19 @@ func (e Executor) Run(ctx context.Context, pl plan.Plan, opts Options) error {
 			if err := e.handleReflink(ctx, src, target, opts); err != nil {
 				if errors.Is(err, errReflinkUnsupported) {
 					fmt.Fprintf(opts.stdout(), "reflink unsupported for %s, falling back to rsync\n", src)
-					if err := e.handleRsync(ctx, src, target, opts); err != nil {
+					if err := dispatch(src, target); err != nil {
 						return err
 					}
 					continue
 				}
-				return fmt.Errorf("reflink %s -> %s: %w", src, target, err)
+				return err
 			}
 		case plan.StepRsync:
 			if e.completed[key] {
 				fmt.Fprintf(opts.stdout(), "rsync skipped, already handled via btrfs for %s\n", src)
 				continue
 			}
-			if err := e.handleRsync(ctx, src, target, opts); err != nil {
+			if err := dispatch(src, target); err != nil {
 				return err
 			}
 		case plan.StepRename:
@@ -79,6 +158,11 @@ func (e Executor) Run(ctx context.Context, pl plan.Plan, opts Options) error {
 	return nil
 }
 
+type rsyncTask struct {
+	src  string
+	dest string
+}
+
 func (e Executor) handleReflink(ctx context.Context, src, dest string, opts Options) error {
 	if opts.DryRun {
 		fmt.Fprintf(opts.stdout(), "dry-run: would reflink %s -> %s\n", src, dest)
@@ -86,12 +170,15 @@ func (e Executor) handleReflink(ctx context.Context, src, dest string, opts Opti
 	}
 	info, err := statPath(src)
 	if err != nil {
-		return err
+		return wrapStepError(plan.StepReflink, src, dest, err)
 	}
 	if info.IsDir() {
 		return errReflinkUnsupported
 	}
-	return reflinkCopy(src, dest, info)
+	if err := reflinkCopy(src, dest, info); err != nil {
+		return wrapStepError(plan.StepReflink, src, dest, err)
+	}
+	return nil
 }
 
 func (e Executor) handleRsync(ctx context.Context, src, dest string, opts Options) error {
@@ -133,11 +220,14 @@ func (e Executor) handleRsync(ctx context.Context, src, dest string, opts Option
 		return err
 	}
 	if err := runCommand(ctx, args, opts.stdout(), opts.stderr()); err != nil {
-		return err
+		if errors.Is(err, context.Canceled) {
+			return err
+		}
+		return wrapStepError(plan.StepRsync, src, dest, err)
 	}
 	if opts.Move && !srcRemote && !opts.DryRun {
 		if err := mv.PruneEmptyDirs([]string{src}); err != nil {
-			return fmt.Errorf("prune %s: %w", src, err)
+			return wrapStepError(plan.StepRsync, src, dest, fmt.Errorf("prune %s: %w", src, err))
 		}
 	}
 	return nil
@@ -149,7 +239,7 @@ func (e Executor) handleRename(src, dest string, opts Options) error {
 		return nil
 	}
 	if err := mv.Rename(src, dest); err != nil {
-		return fmt.Errorf("rename %s -> %s: %w", src, dest, err)
+		return wrapStepError(plan.StepRename, src, dest, fmt.Errorf("rename %s -> %s: %w", src, dest, err))
 	}
 	return nil
 }

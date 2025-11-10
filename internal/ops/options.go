@@ -12,6 +12,7 @@ type Options struct {
 	Move         bool
 	Inplace      bool
 	DryRun       bool
+	Parallel     int
 	BtrfsDecider BtrfsDecider
 
 	Stdout io.Writer

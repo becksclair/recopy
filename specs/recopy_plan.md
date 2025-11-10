@@ -21,6 +21,7 @@
 - LICENSE (MIT), CODEOWNERS, CONTRIBUTING.md
 - `README.md` (purpose, quick start, safety guarantees)
 - `DESIGN.md` (short narrative of architecture)
+- `.mise.toml` tasks for fmt/vet/test/build/install/ci workflows
 
 **Acceptance**
 - `go build ./cmd/recopy` produces a static binary

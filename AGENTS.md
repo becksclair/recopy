@@ -8,9 +8,13 @@
 - `test/`: Holds future integration fixtures.
 
 ## Build, Test, and Development Commands
-- `go build ./cmd/recopy` — compile the CLI.
-- `go test ./...` — run all Go tests (happy-path smoke tests only unless fixing a regression).
-- `gofmt -w <files>` — enforce formatting before committing.
+- `mise run fmt` — run `gofmt -s` over all tracked Go files.
+- `mise run vet` — `go vet ./...` sanity checks.
+- `mise run test` — execute the happy-path `go test ./...` suite.
+- `mise run ci` — convenience task that runs fmt, vet, then test.
+- `mise run build` — compile the CLI (`go build ./cmd/recopy`).
+- `mise run install` — install `recopy` into your Go bin path.
+- You can still call the underlying `go build`, `go test`, or `gofmt` commands directly when faster.
 
 ## Coding Style & Naming Conventions
 - Go 1.25.3 toolchain; rely on stdlib unless a dependency saves ≥30 minutes.

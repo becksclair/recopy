@@ -84,6 +84,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m model) View() tea.View {
 	var b strings.Builder
 	fmt.Fprintf(&b, "MODE %s • PROFILE %s • TRANSPORT %s", strings.ToUpper(m.opts.Mode), strings.ToUpper(m.opts.Profile), strings.ToUpper(m.opts.Transport))
+	workers := m.opts.Workers
+	if workers <= 0 {
+		workers = 1
+	}
+	fmt.Fprintf(&b, " • WORKERS %d", workers)
 	if m.opts.Mirror {
 		b.WriteString(" • MIRROR")
 	}

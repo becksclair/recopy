@@ -1,2 +1,26 @@
 [tools]
 go = "1.25.3"
+
+[tasks.fmt]
+description = "Format Go sources with gofmt -s"
+run = "git ls-files '*.go' | xargs -r gofmt -s -w"
+
+[tasks.vet]
+description = "Run go vet across the repo"
+run = "go vet ./..."
+
+[tasks.test]
+description = "Run go test ./..."
+run = "go test ./..."
+
+[tasks.build]
+description = "Build the recopy CLI"
+run = "go build ./cmd/recopy"
+
+[tasks.install]
+description = "Install recopy into GOPATH/bin"
+run = "go install ./cmd/recopy"
+
+[tasks.ci]
+description = "Run fmt, vet, and test in sequence"
+depends = ["fmt", "vet", "test"]
