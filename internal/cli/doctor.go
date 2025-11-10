@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"runtime"
 	"strings"
 
 	"recopy/internal/rsync"
@@ -88,6 +89,9 @@ func runDoctor(ctx context.Context) int {
 			Name:   "kernel: copy_file_range",
 			Advice: "upgrade to kernel ≥5.10 for zero-copy support",
 			Run: func(context.Context) (string, error) {
+				if runtime.GOOS != "linux" {
+					return "skipped (linux only)", nil
+				}
 				if supported, err := probeCopyFileRange(); err != nil {
 					return "", err
 				} else if !supported {
@@ -100,6 +104,9 @@ func runDoctor(ctx context.Context) int {
 			Name:   "kernel: io_uring",
 			Advice: "upgrade to kernel ≥5.10 for advanced async I/O (optional)",
 			Run: func(context.Context) (string, error) {
+				if runtime.GOOS != "linux" {
+					return "skipped (linux only)", nil
+				}
 				if supported, err := probeIOUring(); err != nil {
 					return "", err
 				} else if !supported {
