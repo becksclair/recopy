@@ -170,13 +170,13 @@ func trySendfile(src, dest string, info FileInfo) error {
 	return dstFile.Sync()
 }
 
-// SparseReader wraps io.Reader to detect and skip sparse regions
-type SparseReader struct {
+// sparseReader wraps io.Reader to detect and skip sparse regions (reserved for future use)
+type sparseReader struct {
 	file *os.File
 }
 
 // Read implements io.Reader, using SEEK_DATA/SEEK_HOLE to skip sparse regions
-func (sr *SparseReader) Read(p []byte) (n int, err error) {
+func (sr *sparseReader) Read(p []byte) (n int, err error) {
 	// For now, just delegate to regular Read
 	// Future optimization: use SEEK_DATA/SEEK_HOLE via unix.Seek with SEEK_DATA constant
 	return sr.file.Read(p)
