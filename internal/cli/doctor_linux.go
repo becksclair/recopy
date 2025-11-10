@@ -8,7 +8,12 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// probeCopyFileRange tests if copy_file_range syscall is available
+// probeCopyFileRange probes whether the kernel's copy_file_range syscall is available and operable.
+// 
+// It returns true if a test copy succeeded or if the syscall is present but the operation failed
+// for reasons other than ENOSYS (e.g., filesystem limitations). It returns false when the syscall
+// is not available (ENOSYS) or when setup for the probe fails. The function does not propagate
+// probe-time errors and reports availability via the boolean result.
 func probeCopyFileRange() (bool, error) {
 	// Create two temporary files to test the syscall
 	src, err := os.CreateTemp("", "recopy-probe-src-*")
@@ -50,7 +55,10 @@ func probeCopyFileRange() (bool, error) {
 	return true, nil
 }
 
-// probeIOUring tests if io_uring is available
+// probeIOUring reports whether the running kernel likely supports io_uring.
+// It uses a heuristic (kernel version-based) rather than invoking io_uring syscalls
+// or requiring liburing bindings. Currently the probe conservatively reports false
+// until full io_uring bindings are available.
 func probeIOUring() (bool, error) {
 	// Check for io_uring availability via syscall (syscall 425 on x86_64)
 	// We just check if the syscall exists, not if it succeeds

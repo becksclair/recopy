@@ -16,6 +16,10 @@ type doctorCheck struct {
 	Run    func(context.Context) (string, error)
 }
 
+// runDoctor executes a set of system preflight checks (rsync, ssh, btrfs, hyperfine,
+// perf, and kernel feature probes), prints each check's result and any associated advice.
+// The ctx is used for subprocess execution and probe timeouts.
+// It returns 0 when all checks succeed and 1 if any check fails.
 func runDoctor(ctx context.Context) int {
 	checks := []doctorCheck{
 		{
