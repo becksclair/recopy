@@ -27,7 +27,13 @@ type Options struct {
 
 // File copies a single file from src to dest using the most efficient method available.
 // It attempts reflink first, then copy_file_range, then sendfile, falling back to
-// buffered I/O if necessary. Metadata is preserved according to opts.
+// File copies a single regular file from src to dest using the most efficient
+// available method and optionally preserves permissions, ownership, and timestamps
+// when opts.PreserveAll is true.
+//
+// It attempts reflink, copy_file_range, and sendfile in that order and falls back
+// to a buffered copy if none are supported. It returns an error if src is a
+// directory or if the copy or metadata preservation fails.
 func File(src, dest string, info FileInfo, opts Options) error {
 	if info.IsDir() {
 		return fmt.Errorf("cannot copy directory as file: %s", src)
@@ -74,7 +80,8 @@ func File(src, dest string, info FileInfo, opts Options) error {
 	return nil
 }
 
-// bufferedCopy performs a traditional read/write loop with a large buffer
+// bufferedCopy copies the contents of src to dest using a 1 MiB buffer and sets the destination file's permission bits from info.
+// It creates or truncates dest (overwriting existing content) and returns any error encountered while opening files, copying data, or syncing the destination.
 func bufferedCopy(src, dest string, info FileInfo, opts Options) error {
 	srcFile, err := os.Open(src)
 	if err != nil {

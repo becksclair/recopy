@@ -52,7 +52,12 @@ type Plan struct {
 	Steps []Step
 }
 
-// Build produces a deterministic set of steps for the provided inputs.
+// Build produces a deterministic Plan of Steps for the given Input.
+// The planner emits one step per source (sorted deterministically) and selects the action based on source/destination characteristics:
+// it may propose a Btrfs send/receive offer for Btrfs subvolumes (when transport is "auto"), use a rename for moves on the same device,
+// use a reflink when both sides support it and reflinks are allowed, use a local copy engine (copy_file_range) for same-device copies
+// when reflink is not used and rsync is not forced, and fall back to rsync otherwise.
+// It returns an error if no sources are provided or if the destination path cannot be parsed.
 func Build(in Input) (Plan, error) {
 	if len(in.Sources) == 0 {
 		return Plan{}, fmt.Errorf("plan: no sources provided")

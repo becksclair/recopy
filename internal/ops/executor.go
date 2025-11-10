@@ -328,6 +328,8 @@ func (e Executor) copyDirectory(ctx context.Context, src, dest string, opts Opti
 	})
 }
 
+// statPath returns file information for the given path.
+// It returns a fileInfo describing the file or directory at path, or an error if the path cannot be accessed.
 func statPath(path string) (fileInfo, error) {
 	return getFileInfo(path)
 }

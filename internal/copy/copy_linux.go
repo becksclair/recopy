@@ -10,7 +10,10 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// tryReflink attempts a reflink clone (CoW copy) using FICLONE
+// tryReflink attempts to create a copy-on-write reflink of src at dest using the FICLONE ioctl.
+// It removes any existing dest before attempting the operation and syncs the destination on success.
+// On failure it removes any partially created dest; if the operation is not supported by the kernel
+// or filesystem it returns ErrNotSupported, otherwise it returns the underlying error.
 func tryReflink(src, dest string, info FileInfo) error {
 	// Remove dest if it exists
 	if err := os.Remove(dest); err != nil && !os.IsNotExist(err) {
@@ -43,7 +46,8 @@ func tryReflink(src, dest string, info FileInfo) error {
 	return dstFile.Sync()
 }
 
-// tryCopyFileRange uses the copy_file_range syscall for zero-copy
+// tryCopyFileRange attempts to copy src to dest using the copy_file_range syscall for efficient in-kernel data transfer.
+// It copies up to the size reported by info and fsyncs the destination on success. If a copy_file_range error occurs the partial destination is removed; when the error indicates the syscall is not supported the function returns ErrNotSupported, otherwise it returns the underlying error.
 func tryCopyFileRange(src, dest string, info FileInfo, opts Options) error {
 	srcFile, err := os.Open(src)
 	if err != nil {
@@ -88,7 +92,9 @@ func tryCopyFileRange(src, dest string, info FileInfo, opts Options) error {
 	return dstFile.Sync()
 }
 
-// preserveMetadata sets ownership, permissions, and timestamps on dest to match info
+// preserveMetadata sets ownership, permissions, and access/modify times of dest to match info.
+// If ownership data is present in info.Sys() it attempts to change ownership but ignores any error (commonly fails when not run as root).
+// It returns an error if changing permissions or timestamps fails.
 func preserveMetadata(dest string, info FileInfo) error {
 	// Set ownership (may fail if not root; that's OK)
 	if stat, ok := info.Sys().(*unix.Stat_t); ok {
@@ -112,10 +118,17 @@ func preserveMetadata(dest string, info FileInfo) error {
 	return nil
 }
 
+// isReflinkUnsupported reports whether err indicates that the FICLONE reflink
+// operation is unsupported by the kernel or the target filesystem.
+// It returns true when err is or wraps unix.EOPNOTSUPP, unix.EXDEV, or unix.ENOTTY.
 func isReflinkUnsupported(err error) bool {
 	return errors.Is(err, unix.EOPNOTSUPP) || errors.Is(err, unix.EXDEV) || errors.Is(err, unix.ENOTTY)
 }
 
+// isCopyFileRangeUnsupported reports whether err indicates that the
+// copy_file_range syscall is unsupported by the kernel or filesystem.
+// It returns true for errors that commonly signal lack of support:
+// `ENOSYS`, `EXDEV`, `EOPNOTSUPP`, or `EINVAL`.
 func isCopyFileRangeUnsupported(err error) bool {
 	// ENOSYS: syscall not implemented (old kernel)
 	// EXDEV: cross-device copy not supported
@@ -128,7 +141,9 @@ func isCopyFileRangeUnsupported(err error) bool {
 }
 
 // trySendfile uses sendfile syscall as another zero-copy option
-// This is an alternative to copy_file_range for older kernels
+// trySendfile copies file data from src to dest using the sendfile syscall as a fallback for older kernels.
+// It creates or truncates dest with permissions from info.Mode(), removes any partially written dest if an error occurs,
+// and maps ENOSYS or EINVAL errors to ErrNotSupported. On success it syncs the destination file; any encountered error is returned.
 func trySendfile(src, dest string, info FileInfo) error {
 	srcFile, err := os.Open(src)
 	if err != nil {

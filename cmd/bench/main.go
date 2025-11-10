@@ -12,6 +12,15 @@ import (
 	"time"
 )
 
+// main parses command-line flags, prepares a workspace and a seeded dataset, runs a reference
+// cp -a copy and a recopy benchmark, then runs hyperfine to compare their performance.
+//
+// The program supports four dataset types: "mixed" (many files of configurable size),
+// "tiny" (many small 4 KiB files), "large" (single 1 GiB file), and "sparse" (10 GiB sparse-like file).
+// It measures cp -a duration, ensures a recopy binary is available (building it if necessary),
+// runs hyperfine with the configured parallelism, profile, warmups, and runs, and optionally
+// writes Markdown and JSON hyperfine reports into the workspace. Use --keep to retain the
+// workspace after execution.
 func main() {
 	var (
 		dataset    = flag.String("dataset", "mixed", "dataset type: mixed, tiny, large, sparse")
@@ -101,7 +110,11 @@ func main() {
 	}
 }
 
-// seedMixedDataset creates a tree with mixed file sizes across subdirectories
+// seedMixedDataset creates a dataset under root consisting of four subdirectories
+// (dir-00 through dir-03) and writes `files` files named `file-###`. Each file
+// is filled with random data and is `sizeMiB` MiB in size. A README.txt is
+// written in the root. It returns any error encountered while creating
+// directories or writing files.
 func seedMixedDataset(root string, files, sizeMiB int) error {
 	rand.Seed(time.Now().UnixNano())
 	chunk := make([]byte, 1<<20)
@@ -121,7 +134,10 @@ func seedMixedDataset(root string, files, sizeMiB int) error {
 	return os.WriteFile(filepath.Join(root, "README.txt"), []byte("recopy benchmark dataset\n"), 0o644)
 }
 
-// seedTinyDataset creates many tiny files (4 KiB each) to stress metadata operations
+// seedTinyDataset creates many 4 KiB files organized into subdirectories to stress metadata operations.
+// Each file is named `tiny-XXXXX.dat` and placed into `dir-XXX` directories (100 files per directory).
+// root is the directory under which files and subdirectories will be created; count is the total number of files to write.
+// It returns any error encountered while creating directories or writing files.
 func seedTinyDataset(root string, count int) error {
 	rand.Seed(time.Now().UnixNano())
 	chunk := make([]byte, 4096)
@@ -141,7 +157,9 @@ func seedTinyDataset(root string, count int) error {
 	return nil
 }
 
-// seedLargeDataset creates a single 1 GiB file for pure throughput testing
+// seedLargeDataset creates a 1 GiB file named "large-1gib.bin" under the provided root
+// populated with random data for pure throughput testing. It returns any error encountered
+// while generating or writing the file.
 func seedLargeDataset(root string) error {
 	rand.Seed(time.Now().UnixNano())
 	chunk := make([]byte, 1<<20)
@@ -152,7 +170,10 @@ func seedLargeDataset(root string) error {
 	return writeRepeating(path, chunk, 1024)
 }
 
-// seedSparseDataset creates a 10 GiB sparse file with data only at start/end
+// seedSparseDataset creates a 10 GiB sparse file named "sparse-10gib.bin" in the provided root directory.
+// The file contains 1 MiB of random data at the start and 1 MiB of random data at the end, leaving a sparse (unallocated) middle.
+// root is the directory in which the sparse file will be created.
+// It returns an error if file creation, writing, seeking, or syncing fails.
 func seedSparseDataset(root string) error {
 	path := filepath.Join(root, "sparse-10gib.bin")
 	f, err := os.Create(path)
@@ -188,6 +209,9 @@ func seedSparseDataset(root string) error {
 	return f.Sync()
 }
 
+// writeRepeating creates or truncates the file at the given path, writes the provided block
+// repeated copies times, and syncs the file to persistent storage.
+// It returns any error encountered while creating, writing, or syncing the file.
 func writeRepeating(path string, block []byte, copies int) error {
 	f, err := os.Create(path)
 	if err != nil {
