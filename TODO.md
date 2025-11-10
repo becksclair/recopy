@@ -92,9 +92,27 @@ Tracking per-phase tasks from specs/recopy_plan.md. Use checkboxes to mark progr
 - [x] T16.1 Static builds + shell completions
 - [x] T16.2 Man page + `recopy doctor`
 
+## Phase LC – Local Copy Performance (specs/perf_plan.md)
+
+- [x] LC-1.1 Extend cmd/bench with multiple dataset shapes (mixed/tiny/large/sparse)
+- [x] LC-1.2 Add bench-profile/bench-trace mise tasks with perf/strace
+- [x] LC-1.3 Create bench-results/ directory and .gitignore entries
+- [x] LC-1.4 Create docs/perf.md profiling workflow guide
+- [x] LC-1.5 Extend recopy doctor to probe copy_file_range and io_uring
+- [x] LC-1.6 Implement internal/copy package with copy_file_range + reflink fallback
+- [x] LC-1.7 Add plan.StepCopy kind for local same-device copies
+- [x] LC-2.1 Integrate copy engine into ops.Executor (handleCopy + copyDirectory)
+- [x] LC-2.2 Directory walker pipeline with metadata preservation
+- [ ] LC-2.3 Worker pool with separate queues for large vs. small files (deferred)
+- [ ] LC-3.1 Investigate io_uring integration for large sequential transfers
+- [ ] LC-3.2 Add posix_fadvise hints (SEQUENTIAL, WILLNEED)
+- [ ] LC-3.3 Sparse file optimization via SEEK_DATA/SEEK_HOLE
+- [ ] LC-3.4 Acceptance threshold regression checks (bench comparison scripts)
+
 ## Cross-Cutting Decisions
 
 - [x] Upgrade toolchain to Go 1.25.3 and update build scripts
 - [x] Adopt Bubble Tea v2 RC + matching Bubbles/Lip Gloss imports
 - [x] Define minimum supported rsync (3.2.7) and OpenSSH (9.6p1) versions for Ubuntu 24.04 hosts
 - [x] Add shared `mise run` tasks for fmt/vet/test/build/install/ci
+- [x] Create cmd/recopy/main.go entrypoint (cli.Run)

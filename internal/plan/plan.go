@@ -17,6 +17,8 @@ const (
 	StepRename Kind = "rename"
 	// StepReflink clones blocks via reflink when supported by the filesystem.
 	StepReflink Kind = "reflink"
+	// StepCopy performs local copy using copy_file_range and other kernel zero-copy mechanisms.
+	StepCopy Kind = "copy"
 	// StepRsync copies data via rsync.
 	StepRsync Kind = "rsync"
 	// StepBtrfsOffer proposes a send/receive fast path for subvolumes.
@@ -50,7 +52,12 @@ type Plan struct {
 	Steps []Step
 }
 
-// Build produces a deterministic set of steps for the provided inputs.
+// Build produces a deterministic Plan of Steps for the given Input.
+// The planner emits one step per source (sorted deterministically) and selects the action based on source/destination characteristics:
+// it may propose a Btrfs send/receive offer for Btrfs subvolumes (when transport is "auto"), use a rename for moves on the same device,
+// use a reflink when both sides support it and reflinks are allowed, use a local copy engine (copy_file_range) for same-device copies
+// when reflink is not used and rsync is not forced, and fall back to rsync otherwise.
+// It returns an error if no sources are provided or if the destination path cannot be parsed.
 func Build(in Input) (Plan, error) {
 	if len(in.Sources) == 0 {
 		return Plan{}, fmt.Errorf("plan: no sources provided")
@@ -83,6 +90,9 @@ func Build(in Input) (Plan, error) {
 			})
 		}
 
+		// Check if user forced rsync transport explicitly
+		forceRsync := in.Options.Transport == "rsync"
+
 		switch {
 		case !destRemote && !srcInfo.remote && in.Options.Move && srcInfo.sameDevice:
 			out.Steps = append(out.Steps, Step{
@@ -97,6 +107,14 @@ func Build(in Input) (Plan, error) {
 				Sources: []string{src},
 				Dest:    in.Dest,
 				Reason:  "reflink fast path",
+			})
+		case !destRemote && !srcInfo.remote && srcInfo.sameDevice && !forceRsync:
+			// Local same-device copy without reflink support: use copy engine
+			out.Steps = append(out.Steps, Step{
+				Kind:    StepCopy,
+				Sources: []string{src},
+				Dest:    in.Dest,
+				Reason:  "local copy engine (copy_file_range)",
 			})
 		default:
 			out.Steps = append(out.Steps, Step{

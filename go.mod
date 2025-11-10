@@ -1,6 +1,8 @@
 module recopy
 
-go 1.25.3
+go 1.24.2
+
+toolchain go1.24.7
 
 require (
 	charm.land/bubbletea/v2 v2.0.0-rc.1

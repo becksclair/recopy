@@ -1,5 +1,5 @@
-# Binaries
-recopy
+# Binaries (but allow cmd/recopy/ source directory)
+/recopy
 *.exe
 *.exe~
 *.dll
@@ -12,6 +12,11 @@ recopy
 /dist/
 *.test
 *.out
+
+# Benchmark results and profiling data
+/bench-results/
+perf.data
+perf.data.old
 
 # Go module cache artifacts
 vendor/

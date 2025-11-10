@@ -12,10 +12,20 @@ import (
 	"time"
 )
 
+// main parses command-line flags, prepares a workspace and a seeded dataset, runs a reference
+// cp -a copy and a recopy benchmark, then runs hyperfine to compare their performance.
+//
+// The program supports four dataset types: "mixed" (many files of configurable size),
+// "tiny" (many small 4 KiB files), "large" (single 1 GiB file), and "sparse" (10 GiB sparse-like file).
+// It measures cp -a duration, ensures a recopy binary is available (building it if necessary),
+// runs hyperfine with the configured parallelism, profile, warmups, and runs, and optionally
+// writes Markdown and JSON hyperfine reports into the workspace. Use --keep to retain the
+// workspace after execution.
 func main() {
 	var (
-		fileCount  = flag.Int("files", 64, "number of data files")
-		fileSize   = flag.Int("file-size-mib", 2, "size per file in MiB")
+		dataset    = flag.String("dataset", "mixed", "dataset type: mixed, tiny, large, sparse")
+		fileCount  = flag.Int("files", 64, "number of data files (used by mixed/tiny datasets)")
+		fileSize   = flag.Int("file-size-mib", 2, "size per file in MiB (used by mixed dataset)")
 		parallel   = flag.Int("parallel", 1, "recopy --parallel value")
 		profile    = flag.String("profile", "auto", "recopy --profile value")
 		keep       = flag.Bool("keep", false, "keep benchmark workspace")
@@ -27,7 +37,7 @@ func main() {
 	flag.Parse()
 
 	repo := repoRoot()
-	fmt.Printf("recopy bench: files=%d size=%dMiB parallel=%d profile=%s\n", *fileCount, *fileSize, *parallel, *profile)
+	fmt.Printf("recopy bench: dataset=%s parallel=%d profile=%s\n", *dataset, *parallel, *profile)
 
 	workspace := must(os.MkdirTemp("", "recopy-bench-"))
 	if !*keep {
@@ -36,14 +46,30 @@ func main() {
 
 	src := filepath.Join(workspace, "src")
 	ensure(os.MkdirAll(src, 0o755))
-	ensure(seedDataset(src, *fileCount, *fileSize))
+
+	var totalBytes int64
+	switch *dataset {
+	case "mixed":
+		totalBytes = int64(*fileCount) * int64(*fileSize) * 1024 * 1024
+		ensure(seedMixedDataset(src, *fileCount, *fileSize))
+	case "tiny":
+		totalBytes = int64(*fileCount) * 4 * 1024
+		ensure(seedTinyDataset(src, *fileCount))
+	case "large":
+		totalBytes = 1024 * 1024 * 1024
+		ensure(seedLargeDataset(src))
+	case "sparse":
+		totalBytes = 10 * 1024 * 1024 * 1024
+		ensure(seedSparseDataset(src))
+	default:
+		fmt.Fprintf(os.Stderr, "unknown dataset type: %s\n", *dataset)
+		os.Exit(1)
+	}
 
 	cpDest := filepath.Join(workspace, "cp")
 	recopyDest := filepath.Join(workspace, "recopy")
 	ensure(os.MkdirAll(cpDest, 0o755))
 	ensure(os.MkdirAll(recopyDest, 0o755))
-
-	totalBytes := int64(*fileCount) * int64(*fileSize) * 1024 * 1024
 
 	cpDuration := mustDuration(execDuration("cp", "-a", src, cpDest))
 	fmt.Printf("cp -a duration: %s (%.2f MiB/s)\n", cpDuration, throughput(totalBytes, cpDuration))
@@ -84,7 +110,12 @@ func main() {
 	}
 }
 
-func seedDataset(root string, files, sizeMiB int) error {
+// seedMixedDataset creates a dataset under root consisting of four subdirectories
+// (dir-00 through dir-03) and writes `files` files named `file-###`. Each file
+// is filled with random data and is `sizeMiB` MiB in size. A README.txt is
+// written in the root. It returns any error encountered while creating
+// directories or writing files.
+func seedMixedDataset(root string, files, sizeMiB int) error {
 	rand.Seed(time.Now().UnixNano())
 	chunk := make([]byte, 1<<20)
 	if _, err := rand.Read(chunk); err != nil {
@@ -103,6 +134,84 @@ func seedDataset(root string, files, sizeMiB int) error {
 	return os.WriteFile(filepath.Join(root, "README.txt"), []byte("recopy benchmark dataset\n"), 0o644)
 }
 
+// seedTinyDataset creates many 4 KiB files organized into subdirectories to stress metadata operations.
+// Each file is named `tiny-XXXXX.dat` and placed into `dir-XXX` directories (100 files per directory).
+// root is the directory under which files and subdirectories will be created; count is the total number of files to write.
+// It returns any error encountered while creating directories or writing files.
+func seedTinyDataset(root string, count int) error {
+	rand.Seed(time.Now().UnixNano())
+	chunk := make([]byte, 4096)
+	if _, err := rand.Read(chunk); err != nil {
+		return err
+	}
+	for i := 0; i < count; i++ {
+		sub := filepath.Join(root, fmt.Sprintf("dir-%03d", i/100))
+		if err := os.MkdirAll(sub, 0o755); err != nil {
+			return err
+		}
+		path := filepath.Join(sub, fmt.Sprintf("tiny-%05d.dat", i))
+		if err := os.WriteFile(path, chunk, 0o644); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// seedLargeDataset creates a 1 GiB file named "large-1gib.bin" under the provided root
+// populated with random data for pure throughput testing. It returns any error encountered
+// while generating or writing the file.
+func seedLargeDataset(root string) error {
+	rand.Seed(time.Now().UnixNano())
+	chunk := make([]byte, 1<<20)
+	if _, err := rand.Read(chunk); err != nil {
+		return err
+	}
+	path := filepath.Join(root, "large-1gib.bin")
+	return writeRepeating(path, chunk, 1024)
+}
+
+// seedSparseDataset creates a 10 GiB sparse file named "sparse-10gib.bin" in the provided root directory.
+// The file contains 1 MiB of random data at the start and 1 MiB of random data at the end, leaving a sparse (unallocated) middle.
+// root is the directory in which the sparse file will be created.
+// It returns an error if file creation, writing, seeking, or syncing fails.
+func seedSparseDataset(root string) error {
+	path := filepath.Join(root, "sparse-10gib.bin")
+	f, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	// Write 1 MiB at start
+	chunk := make([]byte, 1<<20)
+	rand.Seed(time.Now().UnixNano())
+	if _, err := rand.Read(chunk); err != nil {
+		return err
+	}
+	if _, err := f.Write(chunk); err != nil {
+		return err
+	}
+
+	// Seek to create sparse middle (10 GiB - 2 MiB)
+	size := int64(10*1024*1024*1024 - 2*1024*1024)
+	if _, err := f.Seek(size, io.SeekCurrent); err != nil {
+		return err
+	}
+
+	// Write 1 MiB at end
+	if _, err := rand.Read(chunk); err != nil {
+		return err
+	}
+	if _, err := f.Write(chunk); err != nil {
+		return err
+	}
+
+	return f.Sync()
+}
+
+// writeRepeating creates or truncates the file at the given path, writes the provided block
+// repeated copies times, and syncs the file to persistent storage.
+// It returns any error encountered while creating, writing, or syncing the file.
 func writeRepeating(path string, block []byte, copies int) error {
 	f, err := os.Create(path)
 	if err != nil {
