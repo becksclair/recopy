@@ -37,3 +37,8 @@
 ## Outstanding Questions
 1. (resolved) `mise` covers installing Go 1.25.3; Charm RC deps stay managed via `go mod`.
 2. (resolved) Minimum remote rsync/OpenSSH versions match Ubuntu (3.2.7 / 9.6p1) so no duplicate code paths are required.
+
+## Performance Baseline — 2025-11-10
+- Added `cmd/bench` (invoked via `mise run bench`) to seed a 64×2 MiB dataset and time `cp -a` versus `recopy --parallel=1 --profile auto` on the local filesystem.
+- Initial run on dev machine (tmpfs-backed `/tmp`): `cp -a` finished in ~49.8 ms (≈2.57 GiB/s) while `recopy` completed in ~134 ms (≈0.95 GiB/s); numbers now serve as baseline for future tuning.
+- Bench harness defaults keep the workspace for manual inspection via `--keep`; otherwise it cleans up automatically.

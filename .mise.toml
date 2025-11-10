@@ -24,3 +24,7 @@ run = "go install ./cmd/recopy"
 [tasks.ci]
 description = "Run fmt, vet, and test in sequence"
 depends = ["fmt", "vet", "test"]
+
+[tasks.bench]
+description = "Run the local benchmark harness"
+run = "go run ./cmd/bench"

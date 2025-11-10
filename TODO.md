@@ -84,8 +84,8 @@ Tracking per-phase tasks from specs/recopy_plan.md. Use checkboxes to mark progr
 
 ## Phase 15 – Performance
 
-- [ ] T15.1 Bench scripts + datasets
-- [ ] T15.2 Baseline perf numbers published
+- [x] T15.1 Bench scripts + datasets
+- [x] T15.2 Baseline perf numbers published
 
 ## Phase 16 – Packaging & Docs
 
