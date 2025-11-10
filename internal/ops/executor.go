@@ -270,9 +270,17 @@ func (e Executor) handleCopy(ctx context.Context, src, dest string, opts Options
 		return wrapStepError(plan.StepCopy, src, dest, err)
 	}
 
+	// Detect sparse files
+	sparse := false
+	if info.Mode().IsRegular() {
+		if ok, err := fsprobe.HasSparseData(src); err == nil {
+			sparse = ok
+		}
+	}
+
 	copyOpts := copy.Options{
 		PreserveAll: true, // Always preserve metadata like cp -a
-		Sparse:      false,
+		Sparse:      sparse,
 	}
 
 	if err := copy.File(src, dest, info, copyOpts); err != nil {
