@@ -8,16 +8,21 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
 func main() {
 	var (
-		fileCount = flag.Int("files", 64, "number of data files")
-		fileSize  = flag.Int("file-size-mib", 2, "size per file in MiB")
-		parallel  = flag.Int("parallel", 1, "recopy --parallel value")
-		profile   = flag.String("profile", "auto", "recopy --profile value")
-		keep      = flag.Bool("keep", false, "keep benchmark workspace")
+		fileCount  = flag.Int("files", 64, "number of data files")
+		fileSize   = flag.Int("file-size-mib", 2, "size per file in MiB")
+		parallel   = flag.Int("parallel", 1, "recopy --parallel value")
+		profile    = flag.String("profile", "auto", "recopy --profile value")
+		keep       = flag.Bool("keep", false, "keep benchmark workspace")
+		warmup     = flag.Int("warmup", 1, "hyperfine warmup runs")
+		runs       = flag.Int("runs", 5, "hyperfine run count")
+		exportMD   = flag.String("export-md", "", "path for hyperfine Markdown (default workspace/hyperfine.md)")
+		exportJSON = flag.String("export-json", "", "path for hyperfine JSON (default workspace/hyperfine.json)")
 	)
 	flag.Parse()
 
@@ -53,15 +58,27 @@ func main() {
 		ensure(build.Run())
 	}
 
-	recopyDuration := mustDuration(execDuration(recopyBin,
-		fmt.Sprintf("--parallel=%d", *parallel),
-		"--profile", *profile,
-		src,
-		recopyDest,
-	))
-	fmt.Printf("recopy duration: %s (%.2f MiB/s)\n", recopyDuration, throughput(totalBytes, recopyDuration))
+	hyperfineExports := resolveExports(workspace, *exportMD, *exportJSON)
+	runHyperfine(hyperfineOptions{
+		Src:        src,
+		CpDest:     cpDest,
+		RecopyDest: recopyDest,
+		RecopyBin:  recopyBin,
+		Parallel:   *parallel,
+		Profile:    *profile,
+		Runs:       *runs,
+		Warmup:     *warmup,
+		ExportMD:   hyperfineExports.markdown,
+		ExportJSON: hyperfineExports.json,
+	})
 
 	fmt.Printf("workspace: %s\n", workspace)
+	if hyperfineExports.markdown != "" {
+		fmt.Printf("markdown report: %s\n", hyperfineExports.markdown)
+	}
+	if hyperfineExports.json != "" {
+		fmt.Printf("json report: %s\n", hyperfineExports.json)
+	}
 	if !*keep {
 		fmt.Println("(use --keep to inspect files)")
 	}
@@ -152,4 +169,75 @@ func mustDuration(d time.Duration, err error) time.Duration {
 		panic(err)
 	}
 	return d
+}
+
+type hyperfineOptions struct {
+	Src        string
+	CpDest     string
+	RecopyDest string
+	RecopyBin  string
+	Parallel   int
+	Profile    string
+	Runs       int
+	Warmup     int
+	ExportMD   string
+	ExportJSON string
+}
+
+type exportPaths struct {
+	markdown string
+	json     string
+}
+
+func resolveExports(workspace, md, jsonPath string) exportPaths {
+	result := exportPaths{}
+	if md == "" {
+		result.markdown = filepath.Join(workspace, "hyperfine.md")
+	} else if md != "-" {
+		result.markdown = md
+	}
+	if jsonPath == "" {
+		result.json = filepath.Join(workspace, "hyperfine.json")
+	} else if jsonPath != "-" {
+		result.json = jsonPath
+	}
+	return result
+}
+
+func runHyperfine(opts hyperfineOptions) {
+	if _, err := exec.LookPath("hyperfine"); err != nil {
+		panic("hyperfine not found in PATH")
+	}
+	prepare := fmt.Sprintf("rm -rf %s %s && mkdir -p %s %s",
+		shellQuote(opts.CpDest), shellQuote(opts.RecopyDest), shellQuote(opts.CpDest), shellQuote(opts.RecopyDest))
+	cpCmd := fmt.Sprintf("cp -a %s %s", shellQuote(opts.Src), shellQuote(opts.CpDest))
+	recopyCmd := fmt.Sprintf("%s --parallel=%d --profile %s --no-ui %s %s",
+		shellQuote(opts.RecopyBin), opts.Parallel, shellQuote(opts.Profile), shellQuote(opts.Src), shellQuote(opts.RecopyDest))
+	hfArgs := []string{
+		fmt.Sprintf("--runs=%d", opts.Runs),
+		fmt.Sprintf("--warmup=%d", opts.Warmup),
+		"--style", "color",
+		"--prepare", prepare,
+	}
+	if opts.ExportMD != "" {
+		hfArgs = append(hfArgs, "--export-markdown", opts.ExportMD)
+	}
+	if opts.ExportJSON != "" {
+		hfArgs = append(hfArgs, "--export-json", opts.ExportJSON)
+	}
+	hfArgs = append(hfArgs,
+		"-n", "cp -a", cpCmd,
+		"-n", "recopy", recopyCmd,
+	)
+	cmd := exec.Command("hyperfine", hfArgs...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	ensure(cmd.Run())
+}
+
+func shellQuote(input string) string {
+	if input == "" {
+		return "''"
+	}
+	return "'" + strings.ReplaceAll(input, "'", "'\"'\"'") + "'"
 }

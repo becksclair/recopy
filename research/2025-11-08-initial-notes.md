@@ -39,6 +39,6 @@
 2. (resolved) Minimum remote rsync/OpenSSH versions match Ubuntu (3.2.7 / 9.6p1) so no duplicate code paths are required.
 
 ## Performance Baseline — 2025-11-10
-- Added `cmd/bench` (invoked via `mise run bench`) to seed a 64×2 MiB dataset and time `cp -a` versus `recopy --parallel=1 --profile auto` on the local filesystem.
-- Initial run on dev machine (tmpfs-backed `/tmp`): `cp -a` finished in ~49.8 ms (≈2.57 GiB/s) while `recopy` completed in ~134 ms (≈0.95 GiB/s); numbers now serve as baseline for future tuning.
-- Bench harness defaults keep the workspace for manual inspection via `--keep`; otherwise it cleans up automatically.
+- `cmd/bench` (via `mise run bench`) now seeds a 64×2 MiB dataset, then hands both `cp -a` and `recopy --parallel=N --profile` to `hyperfine` so we get comparative charts plus Markdown/JSON exports (defaults land in the temp workspace).
+- Latest `hyperfine` sample (runs=5, warmup=1, tmpfs `/tmp`): `cp -a` ≈40 ms (≈3.19 GiB/s) vs `recopy --parallel=1 --profile auto --no-ui` ≈153 ms (≈0.83 GiB/s). These numbers track raw syscall overhead we can optimize later.
+- Harness still exposes `--keep` for artifact inspection and now accepts `--runs`, `--warmup`, `--export-md`, and `--export-json` for custom reports.
